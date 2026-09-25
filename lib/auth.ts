@@ -1,0 +1,79 @@
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
+import { dataDir, insertProfile, wipeUser } from "./db";
+import { cleanName } from "./security";
+
+mkdirSync(dataDir, { recursive: true });
+
+function secret(): string {
+  const fromEnv = process.env.BETTER_AUTH_SECRET?.trim();
+  if (fromEnv) {
+    if (fromEnv.length < 32) throw new Error("BETTER_AUTH_SECRET must be at least 32 characters");
+    return fromEnv;
+  }
+  const file = path.join(dataDir, "secret");
+  if (existsSync(file)) return readFileSync(file, "utf8").trim();
+  const created = randomBytes(48).toString("base64url");
+  writeFileSync(file, created, { mode: 0o600, flag: "wx" });
+  chmodSync(file, 0o600);
+  return created;
+}
+
+export const baseURL = process.env.BETTER_AUTH_URL || "http://127.0.0.1:3960";
+
+export const auth = betterAuth({
+  appName: "Keel",
+  baseURL,
+  secret: secret(),
+  database: new DatabaseSync(path.join(dataDir, "keel.db")),
+  emailAndPassword: {
+    enabled: true,
+    minPasswordLength: 12,
+    maxPasswordLength: 128,
+    autoSignIn: true,
+  },
+  user: {
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        wipeUser(user.id);
+      },
+    },
+  },
+  session: {
+    expiresIn: 60 * 60 * 24 * 14,
+    updateAge: 60 * 60 * 24,
+    cookieCache: { enabled: false },
+  },
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 30,
+    customRules: {
+      "/sign-in/email": { window: 300, max: 5 },
+      "/sign-up/email": { window: 3600, max: 8 },
+    },
+  },
+  trustedOrigins: [baseURL, "http://127.0.0.1:3960", "http://localhost:3960"],
+  advanced: {
+    useSecureCookies: process.env.NODE_ENV === "production",
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      httpOnly: true,
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          insertProfile(user.id, cleanName(user.name) ?? "Learner");
+        },
+      },
+    },
+  },
+  plugins: [nextCookies()],
+});

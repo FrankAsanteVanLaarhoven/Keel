@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Keel
 
-## Getting Started
+Keel is a private learning programme for staff and students. It teaches how to build and run systems for people who are not developers: tools, platforms, design, and the operational life of a system.
 
-First, run the development server:
+Frank Asante Van Laarhoven.
+
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://127.0.0.1:3960.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm test
+pnpm typecheck
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Accounts
 
-## Learn More
+Sign-in is [Better Auth](https://better-auth.com), on this server, with SQLite in `.data/`. Passphrases are hashed by Better Auth. The session cookie is HttpOnly. Keel does not use a hosted identity service, so account data is not sent to one.
 
-To learn more about Next.js, take a look at the following resources:
+Set `BETTER_AUTH_SECRET` in production (32 characters or more). Locally, if it is unset, Keel writes `.data/secret`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Voice
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The lesson can be read aloud on this device without sending audio anywhere.
 
-## Deploy on Vercel
+If `XAI_API_KEY` is set and the learner allows the live tutor, speech and the current lesson go to xAI (`grok-4.7` for typed questions, the voice API for talk and speech). The key stays on the server. A live talk session uses a short-lived token. Audio is not written to disk.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Cache
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Static files may be cached. `/api` responses are `private, no-store`. The service worker does not cache account, case, or session data.
+
+The cases are fictional. Do not put real pupil, patient, or payment records into a note.
