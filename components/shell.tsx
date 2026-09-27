@@ -85,6 +85,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
   const links = [
     ["/", m.programme],
     ["/course", m.cases],
+    ["/foundry", m.foundry],
     ["/standing", m.standing],
     ["/dossier", m.dossier],
   ] as const;
