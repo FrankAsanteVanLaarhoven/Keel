@@ -13,13 +13,18 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function FoundryPage() {
+export default async function FoundryPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ challenge?: string }>;
+}) {
   const locale = await resolveLocale();
   const m = t(locale);
+  const resolvedParams = searchParams ? await searchParams : undefined;
 
   return (
     <main id="content" className="pb-28">
-      <FoundryLab m={m} />
+      <FoundryLab m={m} initialChallengeId={resolvedParams?.challenge} />
     </main>
   );
 }

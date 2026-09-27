@@ -234,11 +234,12 @@ const CHALLENGES: Challenge[] = [
   },
 ];
 
-export function FoundryLab({ m }: { m: Messages }) {
-  const { me } = useKeel();
-  const [activeChallenge, setActiveChallenge] = useState<ChallengeId>("freeform");
-  const [nodes, setNodes] = useState<SystemNode[]>(CHALLENGES[0].initialNodes);
-  const [connections, setConnections] = useState<Connection[]>(CHALLENGES[0].initialConnections);
+export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChallengeId?: string }) {
+  const { me, refresh } = useKeel();
+  const validInitial = CHALLENGES.find((c) => c.id === initialChallengeId);
+  const [activeChallenge, setActiveChallenge] = useState<ChallengeId>(validInitial ? (initialChallengeId as ChallengeId) : "freeform");
+  const [nodes, setNodes] = useState<SystemNode[]>(validInitial ? validInitial.initialNodes : CHALLENGES[0].initialNodes);
+  const [connections, setConnections] = useState<Connection[]>(validInitial ? validInitial.initialConnections : CHALLENGES[0].initialConnections);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [connectFromId, setConnectFromId] = useState<string | null>(null);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
@@ -247,7 +248,7 @@ export function FoundryLab({ m }: { m: Messages }) {
   const [trafficMultiplier, setTrafficMultiplier] = useState(1);
   const [chaosActive, setChaosActive] = useState(false);
   const [ciStatus, setCiStatus] = useState<"idle" | "running" | "passed" | "failed">("idle");
-  const [xp, setXp] = useState(120);
+  const [xp, setXp] = useState(me?.xp ?? 120);
   const [solvedChallenges, setSolvedChallenges] = useState<string[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [showTooltips, setShowTooltips] = useState(true);
@@ -276,8 +277,15 @@ export function FoundryLab({ m }: { m: Messages }) {
       setSolvedChallenges((prev) => [...prev, activeChallenge]);
       setXp((prev) => prev + 50);
       setToast({ message: `🎉 Mission Passed! +50 XP: ${current.title}`, type: "success" });
+      fetch("/api/foundry/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-keel": "1" },
+        body: JSON.stringify({ challengeId: activeChallenge }),
+      })
+        .then(() => refresh())
+        .catch(() => {});
     }
-  }, [nodes, connections, activeChallenge, solvedChallenges]);
+  }, [nodes, connections, activeChallenge, solvedChallenges, refresh]);
 
   // Particle generator loop
   useEffect(() => {

@@ -185,6 +185,7 @@ export const en = {
   markFive: "Five cases accepted",
   markAll: "All eleven cases accepted",
   markBrief: "Harbor Market brief accepted",
+  markFoundry: "Foundry Architect",
   usefulCount: "people marked this useful",
   practiceTitle: "Bench",
   capstoneTitle: "Case file",

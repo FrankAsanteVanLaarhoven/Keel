@@ -187,6 +187,7 @@ export const zh: Messages = {
   markFive: "接受五个案例",
   markAll: "十一个案例都已接受",
   markBrief: "Harbor Market 简报已接受",
+  markFoundry: "工坊架构师",
   usefulCount: "人标了有用",
   practiceTitle: "工作台",
   capstoneTitle: "案例档案",

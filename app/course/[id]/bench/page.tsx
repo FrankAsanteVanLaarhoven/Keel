@@ -49,10 +49,41 @@ export default async function BenchPage({ params }: { params: Promise<{ id: stri
           choose={bench.kind === "multi" ? bench.choose : undefined}
           m={m}
         />
-        <p className="mt-8 text-sm">
-          <Link className="underline decoration-line underline-offset-4" href={`/course/${meta.id}/case`}>{m.startCase}</Link>
-        </p>
+        <SubmitSectionLink metaId={meta.id} startCaseText={m.startCase} />
       </div>
     </SectionScope>
+  );
+}
+
+function SubmitSectionLink({ metaId, startCaseText }: { metaId: string; startCaseText: string }) {
+  const foundryChallengeMap: Record<string, string> = {
+    tiers: "c2_design",
+    integration: "c3_cicd",
+    scale: "c4_scale",
+    observe: "c5_observability",
+    security: "c1_security",
+  };
+  const foundryChallenge = foundryChallengeMap[metaId];
+
+  return (
+    <>
+      {foundryChallenge ? (
+        <div className="mt-8 rounded-xl border border-line bg-raised/70 p-4">
+          <p className="text-xs uppercase font-bold tracking-wider text-copper">Interactive Systems Foundry</p>
+          <p className="mt-1 text-sm text-ink">Practice this architecture hands-on with live 2D/3D dataflow and chaos simulation.</p>
+          <Link
+            href={`/foundry?challenge=${foundryChallenge}`}
+            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line bg-paper px-3 py-1.5 text-xs font-semibold text-ink hover:border-copper transition-colors"
+          >
+            <span>⚡</span> Launch in Interactive Foundry
+          </Link>
+        </div>
+      ) : null}
+      <p className="mt-8 text-sm">
+        <Link className="underline decoration-line underline-offset-4" href={`/course/${metaId}/case`}>
+          {startCaseText}
+        </Link>
+      </p>
+    </>
   );
 }

@@ -187,6 +187,7 @@ export const fr: Messages = {
   markFive: "Cinq cas acceptés",
   markAll: "Les onze cas acceptés",
   markBrief: "Note Harbor Market acceptée",
+  markFoundry: "Architecte de l'Atelier",
   usefulCount: "personnes ont marqué ceci utile",
   practiceTitle: "Établi",
   capstoneTitle: "Dossier du cas",

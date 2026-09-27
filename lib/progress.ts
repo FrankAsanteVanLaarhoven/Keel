@@ -10,6 +10,7 @@ export function marksOf(rows: ProgressRow[]): string[] {
   if (cases >= 5) marks.push("five");
   if (cases >= 11) marks.push("all");
   if (done("brief")) marks.push("brief");
+  if (done("foundry")) marks.push("foundry");
   return marks;
 }
 

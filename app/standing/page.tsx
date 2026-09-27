@@ -30,6 +30,7 @@ export default async function StandingPage() {
     five: m.markFive,
     all: m.markAll,
     brief: m.markBrief,
+    foundry: m.markFoundry,
   };
   return (
     <div className="mx-auto max-w-6xl px-5 pb-28 pt-12">

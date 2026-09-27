@@ -187,6 +187,7 @@ export const ar: Messages = {
   markFive: "خمس حالات مقبولة",
   markAll: "الحالات الإحدى عشرة مقبولة",
   markBrief: "مذكرة Harbor Market مقبولة",
+  markFoundry: "مهندس المختبر",
   usefulCount: "أشخاص علّموه مفيدا",
   practiceTitle: "المنضدة",
   capstoneTitle: "ملف الحالة",

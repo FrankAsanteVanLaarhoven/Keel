@@ -187,6 +187,7 @@ export const ja: Messages = {
   markFive: "五つの事例を受理",
   markAll: "十一の事例をすべて受理",
   markBrief: "Harbor Market の報告書を受理",
+  markFoundry: "工房アーキテクト",
   usefulCount: "人が役に立つと印をつけた",
   practiceTitle: "作業台",
   capstoneTitle: "事例ファイル",

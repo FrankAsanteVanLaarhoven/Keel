@@ -113,6 +113,7 @@ describe("calendar and tutor", () => {
     expect(streakOf(["2026-09-23", "2026-09-24"], "2026-09-25")).toBe(2);
     expect(streakOf(["2026-09-25"], "2026-09-25")).toBe(1);
     expect(marksOf([{ itemId: "tools", kind: "check", score: 1, day: "2026-09-25" }])).toEqual(["check"]);
+    expect(marksOf([{ itemId: "tools", kind: "check", score: 1, day: "2026-09-25" }, { itemId: "c1_security", kind: "foundry", score: 1, day: "2026-09-25" }])).toEqual(["check", "foundry"]);
     expect(clientDay("2026-09-25", Date.parse("2026-09-25T12:00:00Z"))).toBe("2026-09-25");
     expect(utcWeekStart(Date.parse("2026-09-24T12:00:00Z"))).toBe(Date.parse("2026-09-21T00:00:00Z"));
   });

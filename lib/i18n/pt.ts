@@ -187,6 +187,7 @@ export const pt: Messages = {
   markFive: "Cinco casos aceitos",
   markAll: "Os onze casos aceitos",
   markBrief: "Parecer do Harbor Market aceito",
+  markFoundry: "Arquiteto da Oficina",
   usefulCount: "pessoas marcaram isto como útil",
   practiceTitle: "Bancada",
   capstoneTitle: "Arquivo do caso",
