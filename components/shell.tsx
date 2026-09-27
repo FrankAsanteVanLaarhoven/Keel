@@ -169,7 +169,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
       ) : null}
       <CharacterBackdrop />
       <main id="content" className="relative z-10">{children}</main>
-      <footer className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 pb-28 text-sm text-soft">
+      <footer className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 pb-36 text-sm text-soft">
         <span>{m.footer}</span>
         <span className="flex gap-4">
           <Link href="/data">{m.privacy}</Link>
