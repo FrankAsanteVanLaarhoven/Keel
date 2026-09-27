@@ -4,7 +4,7 @@ import { guard, json } from "@/lib/http";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { userFrom } from "@/lib/ready";
-import { grokReply, issueUtterance, liveEnabled, tutorInstructions } from "@/lib/server/live";
+import { aiReply, hasTts, issueUtterance, liveEnabled, tutorInstructions } from "@/lib/server/live";
 import { fill, localReply } from "@/lib/tutor";
 import { getConsent } from "@/lib/store";
 
@@ -43,12 +43,13 @@ export async function POST(request: Request) {
     });
   }
   try {
-    const text = await grokReply(
+    const text = await aiReply(
       tutorInstructions({ localeName: locale, title, promise, how, expert, narration }),
       message,
     );
     const spoken = text || fill(messages.tutorStay, { title, promise, how });
-    return json({ text: spoken, utterance: issueUtterance(user.id, spoken, locale) });
+    const utterance = hasTts() ? issueUtterance(user.id, spoken, locale) : undefined;
+    return json({ text: spoken, utterance });
   } catch {
     return json({
       text: localReply({

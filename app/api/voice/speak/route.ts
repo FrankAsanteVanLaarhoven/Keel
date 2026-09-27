@@ -4,7 +4,7 @@ import { guard, json } from "@/lib/http";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { userFrom } from "@/lib/ready";
-import { liveEnabled, speakText } from "@/lib/server/live";
+import { hasTts, liveEnabled, speakText } from "@/lib/server/live";
 import { getConsent } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   const user = await userFrom(request);
   if (!user) return json({ error: "auth" }, 401);
   if (!getConsent(user.id) || !liveEnabled()) return json({ engine: "device" }, 404);
+  if (!hasTts()) return json({ engine: "device" });
   const gated = await guard(request, "speak", 20, 10 * 60 * 1000, user.id);
   if (gated.error || !gated.body || typeof gated.body !== "object") return gated.error ?? json({ error: "body" }, 400);
   const sectionId = (gated.body as { sectionId?: string }).sectionId ?? "";

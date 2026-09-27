@@ -4,6 +4,14 @@ import { voiceLanguage } from "../locale";
 import { ephemeralToken, responseText } from "../voice-events";
 
 export function liveEnabled(): boolean {
+  return Boolean(process.env.OPENROUTER_API_KEY || process.env.XAI_API_KEY);
+}
+
+export function hasTts(): boolean {
+  return Boolean(process.env.XAI_API_KEY);
+}
+
+export function hasVoiceSession(): boolean {
   return Boolean(process.env.XAI_API_KEY);
 }
 
@@ -41,12 +49,43 @@ export async function speakText(text: string, locale: Locale): Promise<ArrayBuff
       language: voiceLanguage(locale),
       text_normalization: true,
     }),
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error("tts");
   return response.arrayBuffer();
 }
 
-export async function grokReply(instructions: string, message: string): Promise<string> {
+export async function openrouterReply(instructions: string, message: string): Promise<string> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("no_key");
+  const model = process.env.OPENROUTER_MODEL || "x-ai/grok-4.7";
+  const appUrl = process.env.BETTER_AUTH_URL || "https://keel.learn";
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": appUrl,
+      "X-Title": "Keel",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: message.slice(0, 2000) },
+      ],
+      max_tokens: 400,
+      temperature: 0.4,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error("openrouter");
+  const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const content = data.choices?.[0]?.message?.content ?? "";
+  return content.trim().slice(0, 800);
+}
+
+export async function directXaiReply(instructions: string, message: string): Promise<string> {
   const key = process.env.XAI_API_KEY;
   if (!key) throw new Error("no_key");
   const response = await fetch("https://api.x.ai/v1/responses", {
@@ -57,9 +96,31 @@ export async function grokReply(instructions: string, message: string): Promise<
       instructions,
       input: message.slice(0, 2000),
     }),
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error("tutor");
   return responseText(await response.json()).slice(0, 800);
+}
+
+export async function aiReply(instructions: string, message: string): Promise<string> {
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      return await openrouterReply(instructions, message);
+    } catch (err) {
+      if (process.env.XAI_API_KEY) {
+        return await directXaiReply(instructions, message);
+      }
+      throw err;
+    }
+  }
+  if (process.env.XAI_API_KEY) {
+    return directXaiReply(instructions, message);
+  }
+  throw new Error("no_key");
+}
+
+export async function grokReply(instructions: string, message: string): Promise<string> {
+  return aiReply(instructions, message);
 }
 
 export async function mintVoiceSecret(): Promise<string> {

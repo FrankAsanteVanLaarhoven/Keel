@@ -11,6 +11,7 @@ import { matchAccept } from "../lib/locale";
 import { cacheControlFor, cleanName, clientDay, leaderboardSql, mayCacheStatic, noteOk, sameOrigin, utcWeekStart } from "../lib/security";
 import { localReply } from "../lib/tutor";
 import { ephemeralToken, responseText, takeVoiceEvent } from "../lib/voice-events";
+import { aiReply, hasTts, hasVoiceSession, liveEnabled, openrouterReply } from "../lib/server/live";
 
 describe("grade", () => {
   it("accepts the history check and rejects a theme", () => {
@@ -158,3 +159,67 @@ describe("service worker", () => {
     expect(source).toContain("no-store");
   });
 });
+
+describe("ai provider and openrouter", () => {
+  const originalEnv = { ...process.env };
+
+  it("checks live enabled status based on openrouter or xai keys", () => {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.XAI_API_KEY;
+    expect(liveEnabled()).toBe(false);
+    expect(hasTts()).toBe(false);
+    expect(hasVoiceSession()).toBe(false);
+
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey";
+    expect(liveEnabled()).toBe(true);
+    expect(hasTts()).toBe(false);
+    expect(hasVoiceSession()).toBe(false);
+
+    process.env.XAI_API_KEY = "xai-testkey";
+    expect(liveEnabled()).toBe(true);
+    expect(hasTts()).toBe(true);
+    expect(hasVoiceSession()).toBe(true);
+
+    process.env = { ...originalEnv };
+  });
+
+  it("calls OpenRouter API with correct payload and headers", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey";
+    process.env.OPENROUTER_MODEL = "openai/gpt-4o-mini";
+
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = "";
+    let requestedHeaders: Record<string, string> = {};
+    let requestedBody: Record<string, unknown> = {};
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedHeaders = (init?.headers ?? {}) as Record<string, string>;
+      requestedBody = JSON.parse(String(init?.body ?? "{}"));
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "Focus on the records table." } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const reply = await openrouterReply("You are a tutor.", "What should I check?");
+      expect(reply).toBe("Focus on the records table.");
+      expect(requestedUrl).toBe("https://openrouter.ai/api/v1/chat/completions");
+      expect(requestedHeaders["Authorization"]).toBe("Bearer sk-or-v1-testkey");
+      expect(requestedHeaders["HTTP-Referer"]).toBeDefined();
+      expect(requestedHeaders["X-Title"]).toBe("Keel");
+      expect(requestedBody.model).toBe("openai/gpt-4o-mini");
+      expect(Array.isArray(requestedBody.messages)).toBe(true);
+
+      const aiResult = await aiReply("You are a tutor.", "What should I check?");
+      expect(aiResult).toBe("Focus on the records table.");
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env = { ...originalEnv };
+    }
+  });
+});
+

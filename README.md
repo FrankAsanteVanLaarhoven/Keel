@@ -24,11 +24,13 @@ Sign-in is [Better Auth](https://better-auth.com), on this server, with SQLite i
 
 Set `BETTER_AUTH_SECRET` in production (32 characters or more). Locally, if it is unset, Keel writes `.data/secret`.
 
-## Voice
+## AI Tutor and Voice
 
 The lesson can be read aloud on this device without sending audio anywhere.
 
-If `XAI_API_KEY` is set and the learner allows the live tutor, speech and the current lesson go to xAI (`grok-4.7` for typed questions, the voice API for talk and speech). The key stays on the server. A live talk session uses a short-lived token. Audio is not written to disk.
+When `OPENROUTER_API_KEY` is configured (for example as a Vercel environment variable), all AI-capable features in Keel use OpenRouter (defaulting to `x-ai/grok-4.7`, or configured via `OPENROUTER_MODEL`).
+
+If `XAI_API_KEY` is set and the learner allows the live tutor, speech and the current lesson can also go to xAI (`grok-4.7` for typed questions, the voice API for talk and speech). All keys stay securely on the server. Audio is not written to disk. Without keys, or without learner consent, Keel answers locally and speaks on-device with the microphone off.
 
 ## Cache
 
