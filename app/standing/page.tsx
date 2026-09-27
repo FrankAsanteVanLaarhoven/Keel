@@ -1,8 +1,19 @@
+import type { Metadata } from "next";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
 import { leaderboard, progressSummary } from "@/lib/store";
 import { utcWeekStart } from "@/lib/security";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await resolveLocale();
+  const m = t(locale);
+  return {
+    title: m.standingTitle,
+    description: m.standingDeck,
+    alternates: { canonical: "/standing" },
+  };
+}
 
 export default async function StandingPage() {
   const locale = await resolveLocale();
@@ -59,31 +70,33 @@ function Board({
     <section className="mt-12">
       <h2 className="text-2xl font-medium">{title}</h2>
       {rows.length === 0 ? <p className="mt-4 text-soft">{m.emptyBoard}</p> : null}
-      <table className="mt-4 w-full text-start">
-        <thead className="kicker text-start">
-          <tr>
-            <th className="py-2 text-start font-normal">{m.place}</th>
-            <th className="py-2 text-start font-normal">{m.displayName}</th>
-            <th className="py-2 text-start font-normal">{m.points}</th>
-            <th className="py-2 text-start font-normal">{m.cases}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={`${title}-${row.rank}-${row.name}`} className="border-t border-line">
-              <td className="num py-3">{String(row.rank).padStart(2, "0")}</td>
-              <td className="py-3">{row.name}{row.you ? ` · ${m.yourRow}` : ""}</td>
-              <td className="num py-3">
-                {row.xp}
-                <span className="ms-3 font-mono tracking-tight text-copper" aria-hidden="true">
-                  {"#".repeat(row.xp <= 0 ? 0 : Math.max(1, Math.round((row.xp / top) * 16)))}
-                </span>
-              </td>
-              <td className="num py-3">{row.cases}</td>
+      <div className="overflow-x-auto">
+        <table className="mt-4 w-full min-w-[32rem] text-start">
+          <thead className="kicker text-start">
+            <tr>
+              <th className="py-2 text-start font-normal">{m.place}</th>
+              <th className="py-2 text-start font-normal">{m.displayName}</th>
+              <th className="py-2 text-start font-normal">{m.points}</th>
+              <th className="py-2 text-start font-normal">{m.cases}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${title}-${row.rank}-${row.name}`} className="border-t border-line">
+                <td className="num py-3">{String(row.rank).padStart(2, "0")}</td>
+                <td className="py-3">{row.name}{row.you ? ` · ${m.yourRow}` : ""}</td>
+                <td className="num py-3">
+                  {row.xp}
+                  <span className="ms-3 font-mono tracking-tight text-copper" aria-hidden="true">
+                    {"#".repeat(row.xp <= 0 ? 0 : Math.max(1, Math.round((row.xp / top) * 16)))}
+                  </span>
+                </td>
+                <td className="num py-3">{row.cases}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

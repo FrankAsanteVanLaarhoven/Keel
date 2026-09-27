@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { sectionById } from "@/lib/course/meta";
@@ -8,6 +9,20 @@ import { BenchForm } from "@/components/work";
 import { SectionScope } from "@/components/keel-context";
 import { Figure } from "@/components/figure";
 import { lessonFigures } from "@/lib/course/figures";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const meta = sectionById(id);
+  if (!meta) return { title: "Bench" };
+  const locale = await resolveLocale();
+  const copy = getPack(locale).sections[meta.id];
+  const m = t(locale);
+  return {
+    title: `${m.bench} · ${copy.title}`,
+    description: copy.benchPrompt,
+    alternates: { canonical: `/course/${meta.id}/bench` },
+  };
+}
 
 export default async function BenchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

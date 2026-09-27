@@ -4,10 +4,11 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { dataDir, insertProfile, wipeUser } from "./db";
+import { dataDir, getDb, insertProfile, wipeUser } from "./db";
 import { cleanName } from "./security";
 
 mkdirSync(dataDir, { recursive: true });
+getDb();
 
 function secret(): string {
   const fromEnv = process.env.BETTER_AUTH_SECRET?.trim();
@@ -23,7 +24,13 @@ function secret(): string {
   return created;
 }
 
-export const baseURL = process.env.BETTER_AUTH_URL || "http://127.0.0.1:3960";
+export const baseURL =
+  process.env.BETTER_AUTH_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://127.0.0.1:3960");
 
 export const auth = betterAuth({
   appName: "Keel",
@@ -58,7 +65,15 @@ export const auth = betterAuth({
       "/sign-up/email": { window: 3600, max: 8 },
     },
   },
-  trustedOrigins: [baseURL, "http://127.0.0.1:3960", "http://localhost:3960"],
+  trustedOrigins: [
+    baseURL,
+    "http://127.0.0.1:3960",
+    "http://localhost:3960",
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "",
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "",
+  ].filter(Boolean),
   advanced: {
     useSecureCookies: process.env.NODE_ENV === "production",
     defaultCookieAttributes: {

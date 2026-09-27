@@ -7,9 +7,9 @@ let pending: Promise<void> | null = null;
 export function ensureReady(): Promise<void> {
   if (!pending) {
     pending = (async () => {
+      getDb();
       const ctx = await auth.$context;
       if (typeof ctx.runMigrations === "function") await ctx.runMigrations();
-      getDb();
     })().catch((error: unknown) => {
       pending = null;
       throw error;

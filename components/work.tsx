@@ -8,13 +8,18 @@ type Option = { id: string; text: string };
 type Decision = { id: string; prompt: string; options: Option[] };
 
 async function postGrade(body: unknown): Promise<{ correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string }> {
-  const response = await fetch("/api/grade", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-keel": "1" },
-    body: JSON.stringify({ ...((body ?? {}) as object), day: new Date().toISOString().slice(0, 10) }),
-  });
-  if (response.status === 429) return { error: "rate" };
-  return (await response.json()) as { correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string };
+  try {
+    const response = await fetch("/api/grade", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-keel": "1" },
+      body: JSON.stringify({ ...((body ?? {}) as object), day: new Date().toISOString().slice(0, 10) }),
+    });
+    if (response.status === 429) return { error: "rate" };
+    if (!response.ok) return { error: "server" };
+    return (await response.json()) as { correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string };
+  } catch {
+    return { error: "network" };
+  }
 }
 
 export function CheckForm({
@@ -123,10 +128,20 @@ export function BenchForm({
                 {text.get(id)}
               </span>
               <span className="flex gap-2">
-                <button type="button" className="text-sm underline" onClick={() => move(index, -1)}>
+                <button
+                  type="button"
+                  className="text-sm underline"
+                  onClick={() => move(index, -1)}
+                  aria-label={`${m.orderUp}: ${text.get(id) ?? id}`}
+                >
                   {m.orderUp}
                 </button>
-                <button type="button" className="text-sm underline" onClick={() => move(index, 1)}>
+                <button
+                  type="button"
+                  className="text-sm underline"
+                  onClick={() => move(index, 1)}
+                  aria-label={`${m.orderDown}: ${text.get(id) ?? id}`}
+                >
                   {m.orderDown}
                 </button>
               </span>
@@ -267,7 +282,18 @@ function Submit({ m, pending, disabled = false }: { m: Messages; pending: boolea
 
 function Result({ m, result }: { m: Messages; result: { correct?: boolean; why?: string[]; error?: string; locked?: boolean; saved?: boolean } | null }) {
   if (!result) return null;
-  const tone = result.error === "rate" ? m.rateLimited : result.locked ? m.briefLocked : result.correct ? m.correct : m.notYet;
+  const tone =
+    result.error === "rate"
+      ? m.rateLimited
+      : result.error === "network"
+      ? "Connection error. Could not reach the server — check your connection and try again."
+      : result.error === "server"
+      ? "The server was unable to record this answer. Please try again."
+      : result.locked
+      ? m.briefLocked
+      : result.correct
+      ? m.correct
+      : m.notYet;
   return (
     <div className="mt-6 border-s-2 border-copper ps-4" role="status">
       <p>{tone}</p>

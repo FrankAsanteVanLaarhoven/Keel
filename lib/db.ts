@@ -2,7 +2,9 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export const dataDir = process.env.KEEL_DATA_DIR || path.join(process.cwd(), ".data");
+export const dataDir =
+  process.env.KEEL_DATA_DIR ||
+  (process.env.VERCEL ? path.join("/tmp", ".data") : path.join(process.cwd(), ".data"));
 
 let database: DatabaseSync | null = null;
 
@@ -47,8 +49,53 @@ export function getDb(): DatabaseSync {
       count INTEGER NOT NULL,
       PRIMARY KEY (bucket, window_start)
     );
+    CREATE TABLE IF NOT EXISTS user (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      emailVerified INTEGER NOT NULL DEFAULT 0,
+      image TEXT,
+      createdAt DATE NOT NULL,
+      updatedAt DATE NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS session (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      expiresAt DATE NOT NULL,
+      ipAddress TEXT,
+      userAgent TEXT,
+      createdAt DATE NOT NULL,
+      updatedAt DATE NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS account (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+      accountId TEXT NOT NULL,
+      providerId TEXT NOT NULL,
+      accessToken TEXT,
+      refreshToken TEXT,
+      idToken TEXT,
+      accessTokenExpiresAt DATE,
+      refreshTokenExpiresAt DATE,
+      scope TEXT,
+      password TEXT,
+      createdAt DATE NOT NULL,
+      updatedAt DATE NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS verification (
+      id TEXT PRIMARY KEY,
+      identifier TEXT NOT NULL,
+      value TEXT NOT NULL,
+      expiresAt DATE NOT NULL,
+      createdAt DATE,
+      updatedAt DATE
+    );
     CREATE INDEX IF NOT EXISTS keel_progress_user ON keel_progress(user_id);
     CREATE INDEX IF NOT EXISTS keel_like_section ON keel_like(section_id);
+    CREATE INDEX IF NOT EXISTS session_userId ON session(userId);
+    CREATE INDEX IF NOT EXISTS account_userId ON account(userId);
+    CREATE INDEX IF NOT EXISTS verification_identifier ON verification(identifier);
   `);
   database = db;
   return db;

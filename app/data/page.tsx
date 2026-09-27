@@ -1,5 +1,16 @@
+import type { Metadata } from "next";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await resolveLocale();
+  const m = t(locale);
+  return {
+    title: m.dataTitle,
+    description: m.dataIntro,
+    alternates: { canonical: "/data" },
+  };
+}
 
 export default async function DataPage() {
   const locale = await resolveLocale();

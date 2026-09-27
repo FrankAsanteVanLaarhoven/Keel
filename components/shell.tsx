@@ -8,6 +8,7 @@ import type { Messages } from "@/lib/i18n/en";
 import { Mark } from "./mark";
 import { KeelState, useKeel, type Scope } from "./keel-context";
 import { VoiceDock } from "./voice-dock";
+import { CharacterBackdrop } from "./character-backdrop";
 import { authClient } from "@/lib/auth-client";
 
 const languageNames: Record<Locale, string> = {
@@ -165,7 +166,8 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
           </div>
         </div>
       ) : null}
-      <main id="content">{children}</main>
+      <CharacterBackdrop />
+      <main id="content" className="relative z-10">{children}</main>
       <footer className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 pb-28 text-sm text-soft">
         <span>{m.footer}</span>
         <span className="flex gap-4">

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { nextSectionId, sectionById } from "@/lib/course/meta";
@@ -8,6 +9,20 @@ import { lessonFigures } from "@/lib/course/figures";
 import { Figure } from "@/components/figure";
 import { CaseForm } from "@/components/work";
 import { SectionScope } from "@/components/keel-context";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const meta = sectionById(id);
+  if (!meta) return { title: "Case" };
+  const locale = await resolveLocale();
+  const copy = getPack(locale).sections[meta.id];
+  const m = t(locale);
+  return {
+    title: `${m.capstone} ${copy.caseFile} · ${copy.title}`,
+    description: copy.caseTask,
+    alternates: { canonical: `/course/${meta.id}/case` },
+  };
+}
 
 export default async function CasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

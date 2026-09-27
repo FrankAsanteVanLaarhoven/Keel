@@ -23,14 +23,45 @@ const mono = IBM_Plex_Mono({
 
 const boot = `(function(){try{var t=localStorage.getItem("keel.theme")||"system";if(t!=="light"&&t!=="dark"&&t!=="system")t="system";document.documentElement.dataset.theme=t;}catch(e){}})();`;
 
+const baseURL = process.env.BETTER_AUTH_URL || "http://127.0.0.1:3960";
+
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const m = t(locale);
   return {
-    title: m.metaTitle,
+    metadataBase: new URL(baseURL),
+    title: {
+      default: m.metaTitle,
+      template: `%s · ${m.footer}`,
+    },
     description: m.metaDescription,
+    applicationName: "Keel",
     manifest: "/manifest.webmanifest",
-    icons: { icon: "/icon.svg" },
+    icons: {
+      icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+      apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
+      shortcut: "/icon.svg",
+    },
+    alternates: {
+      canonical: "/",
+    },
+    openGraph: {
+      title: m.metaTitle,
+      description: m.metaDescription,
+      url: "/",
+      siteName: "Keel",
+      locale,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: m.metaTitle,
+      description: m.metaDescription,
+    },
+    robots: {
+      index: false,
+      follow: false,
+    },
   };
 }
 

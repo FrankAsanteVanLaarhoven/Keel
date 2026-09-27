@@ -1,8 +1,20 @@
+import type { Metadata } from "next";
 import { getPack } from "@/lib/course";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
 import { getProfile, progressSummary } from "@/lib/store";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await resolveLocale();
+  const m = t(locale);
+  return {
+    title: m.recordTitle,
+    description: m.recordLine,
+    alternates: { canonical: "/record" },
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function RecordPage() {
   const locale = await resolveLocale();

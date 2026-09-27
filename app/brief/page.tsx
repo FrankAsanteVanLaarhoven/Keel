@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { briefDecisions } from "@/lib/course/meta";
 import { getPack } from "@/lib/course";
 import { t } from "@/lib/i18n/catalog";
@@ -8,6 +9,17 @@ import { lessonFigures } from "@/lib/course/figures";
 import { Figure } from "@/components/figure";
 import { CaseForm } from "@/components/work";
 import { SectionScope } from "@/components/keel-context";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await resolveLocale();
+  const m = t(locale);
+  const brief = getPack(locale).brief;
+  return {
+    title: `${brief.title} · ${m.file} ${m.harborFile}`,
+    description: brief.dek,
+    alternates: { canonical: "/brief" },
+  };
+}
 
 export default async function BriefPage() {
   const locale = await resolveLocale();

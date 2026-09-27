@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  productionBrowserSourceMaps: false,
   serverExternalPackages: ["better-auth"],
   async headers() {
     return [

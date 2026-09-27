@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { sections } from "@/lib/course/meta";
 import { getPack } from "@/lib/course";
@@ -6,6 +7,16 @@ import { resolveLocale } from "@/lib/i18n/server";
 import { lessonFigures } from "@/lib/course/figures";
 import { Figure } from "@/components/figure";
 import { ContinueLink } from "@/components/continue-link";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await resolveLocale();
+  const m = t(locale);
+  return {
+    title: m.homeTitle,
+    description: m.homeDeck,
+    alternates: { canonical: "/" },
+  };
+}
 
 export default async function HomePage() {
   const locale = await resolveLocale();
