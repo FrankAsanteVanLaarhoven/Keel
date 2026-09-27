@@ -25,6 +25,13 @@ import {
   IconExport,
   IconRefresh,
   IconCheck,
+  IconClose,
+  IconXP,
+  IconPrinciple,
+  IconArrowRight,
+  IconPlay,
+  IconPause,
+  IconAnalytics,
 } from "./icons";
 
 export type NodeType =
@@ -66,6 +73,14 @@ interface Particle {
   progress: number;
   speed: number;
   type: "request" | "response" | "cache_hit" | "db_write" | "blocked" | "ci_test";
+  label: string;
+  protocol: string;
+  payloadSize: string;
+  latencyMs: number;
+  status: string;
+  sourceLabel: string;
+  targetLabel: string;
+  description: string;
 }
 
 type ChallengeId = "freeform" | "c1_security" | "c2_design" | "c3_cicd" | "c4_scale" | "c5_observability";
@@ -403,6 +418,12 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   // Simulation State
   const [particles, setParticles] = useState<Particle[]>([]);
   const [trafficMultiplier, setTrafficMultiplier] = useState(1);
+  const [flowSpeed, setFlowSpeed] = useState<0.25 | 0.5 | 1 | 2>(0.5);
+  const [flowPaused, setFlowPaused] = useState(false);
+  const [hoveredParticle, setHoveredParticle] = useState<Particle | null>(null);
+  const [selectedParticle, setSelectedParticle] = useState<Particle | null>(null);
+  const [showAnalyticsDrawer, setShowAnalyticsDrawer] = useState(false);
+  const [recentPacketLedger, setRecentPacketLedger] = useState<Particle[]>([]);
   const [chaosActive, setChaosActive] = useState(false);
   const [ciStatus, setCiStatus] = useState<"idle" | "running" | "passed" | "failed">("idle");
   const [xp, setXp] = useState(me?.xp ?? 120);
@@ -517,7 +538,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     let whyItMatters = "Strict tiering shields private data, protects against single-node crashes, and scales under heavy concurrency.";
     let stepByStep: string[] = [
       "Simulate high traffic with the 'Traffic Surge' button to test latency.",
-      "Trigger 'Chaos Monkey' to evaluate failover resiliency.",
+      "Trigger 'Fault Injection' to evaluate failover resiliency under node outage.",
       "Add a Telemetry & SRE Agent to monitor real-time MTTR and latency.",
     ];
     let canAutoFix = false;
@@ -547,7 +568,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     } else if (hasDown) {
       status = "flawed";
       statusText = "Active Outage: Downstream Dependency Offline";
-      whatIsWrong = "One or more nodes in your critical path have crashed or been killed by chaos testing.";
+      whatIsWrong = "One or more nodes in your critical path have crashed or been simulated offline by fault injection.";
       whyItMatters = "When a downstream service crashes without a fallback replica or cache buffer, user requests timeout, resulting in failed checkouts and damaged trust.";
       stepByStep = [
         "Select the downed node and change its Health Status to 'Healthy', or click 'Auto-Heal & Restore'.",
@@ -650,9 +671,9 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     }
   }, [nodes, connections, activeChallenge, solvedChallenges, refresh]);
 
-  // Particle Generation Loop (Visual 60 FPS live dataflow)
+  // Particle Generation Loop (Human-trackable live dataflow)
   useEffect(() => {
-    if (connections.length === 0) return;
+    if (connections.length === 0 || flowPaused || selectedParticle !== null) return;
     const interval = window.setInterval(() => {
       if (connections.length === 0) return;
       const randomConn = connections[Math.floor(Math.random() * connections.length)];
@@ -663,40 +684,101 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       if (!fromNode || !toNode || fromNode.health === "down") return;
 
       let pType: Particle["type"] = "request";
-      if (toNode.type === "cache") pType = "cache_hit";
-      else if (toNode.type === "database") pType = "db_write";
-      else if (toNode.type === "auth" && chaosActive) pType = "blocked";
-      else if (toNode.type === "ci") pType = "ci_test";
+      let pLabel = "HTTP GET /api/v1/feed";
+      let pProtocol = "HTTPS / TLS 1.3";
+      let pSize = "840 B";
+      let pLatency = 14;
+      let pStatus = "200 OK";
+      let pDesc = "User touchpoint initiating secure TLS session to ingress tier.";
+
+      if (toNode.type === "cache") {
+        pType = "cache_hit";
+        pLabel = "REDIS GET session:token";
+        pProtocol = "RESP / TCP:6379";
+        pSize = "420 B";
+        pLatency = 2;
+        pStatus = "CACHE_HIT";
+        pDesc = "In-memory key-value read bypasses database disk IO for sub-millisecond retrieval.";
+      } else if (toNode.type === "database") {
+        pType = "db_write";
+        pLabel = "SQL INSERT INTO orders";
+        pProtocol = "PostgreSQL / TCP:5432";
+        pSize = "3.2 KB";
+        pLatency = 24;
+        pStatus = "ACID COMMITTED";
+        pDesc = "Synchronous durable write with write-ahead log (WAL) synchronization.";
+      } else if (toNode.type === "auth") {
+        pType = chaosActive ? "blocked" : "request";
+        pLabel = "JWT Session Token Verify";
+        pProtocol = "gRPC / TLS";
+        pSize = "1.1 KB";
+        pLatency = 4;
+        pStatus = chaosActive ? "401 UNAUTHORIZED" : "200 VERIFIED";
+        pDesc = chaosActive
+          ? "Fault injection: Security Guard revoked compromised token at the edge."
+          : "Zero-trust verification validating cryptographic signature and RBAC scopes.";
+      } else if (toNode.type === "queue") {
+        pType = "request";
+        pLabel = "KAFKA PRODUCE events.orders";
+        pProtocol = "Kafka Binary / TCP:9092";
+        pSize = "2.4 KB";
+        pLatency = 5;
+        pStatus = "ACK_ALL";
+        pDesc = "Asynchronous decoupled message published across partitioned event stream.";
+      } else if (toNode.type === "ci") {
+        pType = "ci_test";
+        pLabel = "CI/CD Test Runner Artifact";
+        pProtocol = "GitOps / SSH";
+        pSize = "14.2 KB";
+        pLatency = 38;
+        pStatus = "PASS";
+        pDesc = "Automated pipeline runner executing unit tests and container builds.";
+      }
 
       particleIdRef.current += 1;
       const newParticle: Particle = {
         id: particleIdRef.current,
         connId: randomConn.id,
         progress: 0,
-        speed: (0.016 + Math.random() * 0.01) * trafficMultiplier,
+        // Gentle human-trackable speed (3-6s transit) scaled by flowSpeed and trafficMultiplier
+        speed: (0.003 + Math.random() * 0.0015) * flowSpeed * trafficMultiplier,
         type: pType,
+        label: pLabel,
+        protocol: pProtocol,
+        payloadSize: pSize,
+        latencyMs: pLatency,
+        status: pStatus,
+        sourceLabel: fromNode.label,
+        targetLabel: toNode.label,
+        description: pDesc,
       };
 
-      setParticles((prev) => [...prev.slice(-35), newParticle]);
-    }, 180 / Math.max(1, trafficMultiplier));
+      setParticles((prev) => [...prev.slice(-25), newParticle]);
+      setRecentPacketLedger((prev) => [newParticle, ...prev.slice(0, 19)]);
+    }, 450 / Math.max(0.5, trafficMultiplier * flowSpeed));
 
     return () => window.clearInterval(interval);
-  }, [connections, nodes, trafficMultiplier, chaosActive]);
+  }, [connections, nodes, trafficMultiplier, chaosActive, flowPaused, selectedParticle, flowSpeed]);
 
-  // Particle Movement
+  // Particle Movement Animation Loop
   useEffect(() => {
     let animId: number;
     const step = () => {
-      setParticles((prev) =>
-        prev
-          .map((p) => ({ ...p, progress: p.progress + p.speed }))
-          .filter((p) => p.progress < 1)
-      );
+      // If paused or inspecting a selected particle, STOP the flow completely!
+      if (!flowPaused && selectedParticle === null) {
+        // If hovered, slow down to 0.15x speed for effortless tracking
+        const speedScale = hoveredParticle !== null ? 0.15 : 1.0;
+        setParticles((prev) =>
+          prev
+            .map((p) => ({ ...p, progress: p.progress + p.speed * speedScale }))
+            .filter((p) => p.progress < 1)
+        );
+      }
       animId = requestAnimationFrame(step);
     };
     animId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [flowPaused, selectedParticle, hoveredParticle]);
 
   // Connect Nodes helper
   const makeConnection = (fromId: string, toId: string) => {
@@ -720,7 +802,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       setToast({
         message: isDangerous
           ? "Connected directly to DB! Vulnerability created."
-          : `Linked: ${fromNode?.label} ➔ ${toNode?.label}`,
+          : `Linked: ${fromNode?.label} → ${toNode?.label}`,
         type: isDangerous ? "error" : "success",
       });
     }
@@ -921,7 +1003,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setToast({ message: "Applied Recommended Architecture: Security boundary and middle tier restored.", type: "success" });
   };
 
-  // Chaos: Kill Random Server
+  // Chaos: Simulate Node Outage (Fault Injection)
   const triggerChaos = () => {
     const aliveNodes = nodes.filter((n) => n.health !== "down" && n.type !== "client");
     if (aliveNodes.length === 0) return;
@@ -929,7 +1011,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setNodes((prev) =>
       prev.map((n) => (n.id === target.id ? { ...n, health: "down", rps: 0 } : n))
     );
-    setToast({ message: `Chaos Monkey knocked down: ${target.label}`, type: "error" });
+    setToast({ message: `Fault Injection: Offline node ${target.label}`, type: "error" });
   };
 
   // Chaos: Auto Heal
@@ -1018,10 +1100,10 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
           <span className="text-xs font-semibold text-ink">{toast.message}</span>
           <button
             onClick={() => setToast(null)}
-            className="ms-3 text-xs text-soft hover:text-ink"
+            className="ms-3 text-soft hover:text-ink flex items-center justify-center"
             aria-label="Dismiss notification"
           >
-            ✕
+            <IconClose size={12} />
           </button>
         </div>
       )}
@@ -1041,8 +1123,8 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           <div className="flex items-center gap-3">
             <span className="text-xs uppercase tracking-wider text-soft font-semibold">Gained Experience:</span>
-            <span className="rounded-full border border-line bg-paper px-3 py-1 font-mono text-sm font-bold text-copper shadow-xs">
-              ⚡ {xp} XP
+            <span className="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1 font-mono text-sm font-bold text-copper shadow-xs">
+              <IconXP size={13} className="text-copper" /> {xp} XP
             </span>
             <span className="rounded-full border border-good/30 bg-good/10 px-3 py-1 text-xs font-semibold text-good">
               {solvedChallenges.length}/5 Missions Complete
@@ -1203,9 +1285,9 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               >
                 <span className="flex items-center gap-2">
                   <IconChaos size={16} className="text-danger" />
-                  <span>Chaos Monkey: Kill Server</span>
+                  <span>Fault Injection: Simulate Outage</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono">Disrupt</span>
+                <span className="text-[10px] uppercase font-mono">Simulate</span>
               </button>
 
               <button
@@ -1375,11 +1457,56 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               backgroundSize: "28px 28px",
             }}
           >
-            {/* Canvas Header Legend */}
-            <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-black/70 px-3 py-1.5 backdrop-blur-md">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-mono text-zinc-200 font-semibold">Live Architecture Canvas</span>
-              <span className="text-[10px] text-zinc-400">| Drag nodes • Drag port handles to link</span>
+            {/* Canvas Header Legend & Speed / Flow Controls */}
+            <div className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/75 px-3 py-1.5 backdrop-blur-md">
+              <span className={`h-2 w-2 rounded-full ${flowPaused || selectedParticle ? "bg-amber-400" : "bg-emerald-400 animate-pulse"}`} />
+              <span className="text-xs font-mono text-zinc-200 font-semibold">
+                {flowPaused || selectedParticle ? "Flow Frozen" : "Live Dataflow"}
+              </span>
+
+              {/* Play / Freeze Flow Toggle */}
+              <button
+                onClick={() => {
+                  setFlowPaused((prev) => !prev);
+                  if (selectedParticle) setSelectedParticle(null);
+                }}
+                className="flex items-center gap-1 rounded bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 text-[11px] font-mono font-bold text-zinc-200 transition-colors"
+                title={flowPaused ? "Resume flow" : "Pause flow to inspect behavior"}
+              >
+                {flowPaused ? <IconPlay size={11} className="text-emerald-400" /> : <IconPause size={11} className="text-amber-400" />}
+                <span>{flowPaused ? "Resume" : "Freeze"}</span>
+              </button>
+
+              {/* Speed Selector */}
+              <div className="flex items-center gap-1 rounded bg-zinc-900/90 px-1 py-0.5 border border-zinc-700/60">
+                {([0.25, 0.5, 1, 2] as const).map((spd) => (
+                  <button
+                    key={spd}
+                    onClick={() => { setFlowSpeed(spd); setFlowPaused(false); }}
+                    className={`px-1.5 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                      flowSpeed === spd && !flowPaused
+                        ? "bg-copper text-zinc-100 font-bold"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {spd}x
+                  </button>
+                ))}
+              </div>
+
+              {/* Live Graphs & Analytics Toggle */}
+              <button
+                onClick={() => setShowAnalyticsDrawer((prev) => !prev)}
+                className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-mono font-semibold transition-all ${
+                  showAnalyticsDrawer
+                    ? "bg-copper text-raised border border-copper"
+                    : "bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-700"
+                }`}
+                title="Toggle In-Lab Live Telemetry & Architecture Graphs"
+              >
+                <IconAnalytics size={12} />
+                <span>Live Graphs</span>
+              </button>
             </div>
 
             {/* SVG Directional Connections Layer */}
@@ -1494,7 +1621,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 />
               )}
 
-              {/* Animated Data Particles */}
+              {/* Animated Data Particles with Interactive Inspection */}
               {particles.map((p) => {
                 const conn = connections.find((c) => c.id === p.connId);
                 if (!conn) return null;
@@ -1531,16 +1658,80 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                           ? "#38bdf8"
                           : "#818cf8";
 
+                const isHovered = hoveredParticle?.id === p.id;
+                const isSelected = selectedParticle?.id === p.id;
+
                 return (
-                  <circle
+                  <g
                     key={p.id}
-                    cx={cx}
-                    cy={cy}
-                    r={p.type === "blocked" ? 5 : 4}
-                    fill={color}
-                    className="pointer-events-none"
-                    filter="drop-shadow(0 0 5px currentColor)"
-                  />
+                    className="cursor-pointer"
+                    onPointerEnter={() => setHoveredParticle(p)}
+                    onPointerLeave={() => setHoveredParticle((curr) => (curr?.id === p.id ? null : curr))}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedParticle?.id === p.id) {
+                        setSelectedParticle(null);
+                        setFlowPaused(false);
+                      } else {
+                        setSelectedParticle(p);
+                        setFlowPaused(true);
+                      }
+                    }}
+                  >
+                    {/* Invisible large hit-box for easy click/hover */}
+                    <circle cx={cx} cy={cy} r={18} fill="transparent" />
+
+                    {/* Outer glowing pulse ring */}
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={isSelected ? 10 : isHovered ? 8 : 6}
+                      fill={color}
+                      opacity={isSelected ? 0.45 : isHovered ? 0.35 : 0.2}
+                      className={isSelected ? "animate-ping" : undefined}
+                    />
+
+                    {/* Inner high-contrast solid packet core */}
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={isSelected ? 6 : isHovered ? 5 : 4}
+                      fill={color}
+                      stroke="var(--raised)"
+                      strokeWidth={isSelected ? 2 : 1}
+                      filter="drop-shadow(0 0 6px currentColor)"
+                    />
+
+                    {/* Floating Label HUD Tooltip right above packet when hovered or selected */}
+                    {(isHovered || isSelected) && (
+                      <foreignObject
+                        x={Math.max(10, Math.min(1000, cx - 110))}
+                        y={Math.max(10, cy - 75)}
+                        width="220"
+                        height="65"
+                        className="overflow-visible pointer-events-auto"
+                      >
+                        <div
+                          className="rounded-lg border border-line bg-raised p-2 text-ink shadow-xl text-[11px] backdrop-blur-md"
+                          style={{ borderLeft: `3px solid ${color}` }}
+                        >
+                          <div className="flex items-center justify-between gap-1 font-bold">
+                            <span className="truncate">{p.label}</span>
+                            <span className="text-[9px] font-mono text-soft uppercase tracking-wider px-1 rounded bg-paper">
+                              {p.latencyMs}ms
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-soft mt-0.5">
+                            <span>{p.sourceLabel} → {p.targetLabel}</span>
+                            <span className="font-mono text-good">{p.status}</span>
+                          </div>
+                          <div className="text-[9px] text-copper font-mono mt-1 text-center font-semibold">
+                            {isSelected ? "Flow Stopped • Click to Resume" : "Click to Freeze & Inspect"}
+                          </div>
+                        </div>
+                      </foreignObject>
+                    )}
+                  </g>
                 );
               })}
             </svg>
@@ -1618,7 +1809,262 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 </div>
               );
             })}
+
+            {/* Deep Packet Inspector HUD Card (Active when particle is clicked / frozen) */}
+            {selectedParticle && (
+              <div className="absolute top-14 left-4 right-4 z-30 mx-auto max-w-xl rounded-xl border border-copper bg-raised p-4 text-xs shadow-2xl backdrop-blur-lg">
+                <div className="flex items-center justify-between border-b border-line pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-copper/15 text-copper">
+                      <IconTelemetry size={14} />
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-ink">
+                        Deep Packet Inspection #{selectedParticle.id}: {selectedParticle.label}
+                      </h4>
+                      <p className="text-[10px] text-soft">Dataflow stopped for behavioral analysis</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-danger/30 bg-danger/10 px-2.5 py-0.5 text-[10px] font-mono font-bold text-danger">
+                      ❚❚ FLOW STOPPED
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedParticle(null);
+                        setFlowPaused(false);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg border border-copper bg-copper px-3 py-1 font-bold text-raised shadow-xs hover:opacity-90 transition-opacity"
+                    >
+                      <IconPlay size={12} />
+                      <span>Resume Flow</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Packet Specs Grid */}
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 font-mono text-[11px]">
+                  <div className="rounded border border-line bg-paper p-2">
+                    <span className="text-[9px] text-soft uppercase block">Route</span>
+                    <span className="font-bold text-ink truncate block">
+                      {selectedParticle.sourceLabel} → {selectedParticle.targetLabel}
+                    </span>
+                  </div>
+                  <div className="rounded border border-line bg-paper p-2">
+                    <span className="text-[9px] text-soft uppercase block">Protocol</span>
+                    <span className="font-bold text-copper truncate block">{selectedParticle.protocol}</span>
+                  </div>
+                  <div className="rounded border border-line bg-paper p-2">
+                    <span className="text-[9px] text-soft uppercase block">Latency</span>
+                    <span className="font-bold text-good block">{selectedParticle.latencyMs} ms</span>
+                  </div>
+                  <div className="rounded border border-line bg-paper p-2">
+                    <span className="text-[9px] text-soft uppercase block">Wire Status</span>
+                    <span className="font-bold text-ink block">{selectedParticle.status}</span>
+                  </div>
+                </div>
+
+                <p className="mt-2.5 rounded bg-paper/60 p-2 text-xs text-soft leading-relaxed border border-line/50">
+                  <strong className="text-ink">Architectural Mechanism: </strong>
+                  {selectedParticle.description}
+                </p>
+              </div>
+            )}
           </div>
+
+          {/* Live In-Lab Architecture Telemetry & Graph Drawer */}
+          {showAnalyticsDrawer && (
+            <div className="rounded-xl border border-line bg-raised p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-line pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-copper">
+                    <IconAnalytics size={18} />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-ink">In-Lab Real-Time Telemetry & Architecture Graphs</h3>
+                    <p className="text-[11px] text-soft">Live flight metrics, latency waterfalls, and throughput telemetry.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAnalyticsDrawer(false)}
+                  className="rounded-md border border-line bg-paper px-2.5 py-1 text-xs font-semibold text-soft hover:text-ink"
+                >
+                  <IconClose size={12} className="inline mr-1" />
+                  Close Graphs
+                </button>
+              </div>
+
+              {/* 3-Column Analytics Grid */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                {/* 1. Live RPS Waveform (Area Graph) */}
+                <div className="rounded-lg border border-line bg-paper p-3 text-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-ink flex items-center gap-1.5">
+                        <IconSurge size={14} className="text-copper" />
+                        Live Throughput
+                      </span>
+                      <span className="font-mono text-copper font-bold">{Math.round(nodes.reduce((acc, n) => acc + (n.health === 'down' ? 0 : n.rps), 0) * trafficMultiplier * (flowPaused ? 0 : 1))} RPS</span>
+                    </div>
+                    <p className="text-[10px] text-soft">Aggregated request rate across active cluster nodes</p>
+
+                    {/* SVG Mini Waveform */}
+                    <div className="mt-3">
+                      <svg viewBox="0 0 200 60" className="w-full h-16 overflow-visible" aria-label="Live throughput mini graph">
+                        <defs>
+                          <linearGradient id="miniAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#d08968" stopOpacity="0.5" />
+                            <stop offset="100%" stopColor="#d08968" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        <path
+                          d="M 0 45 Q 25 30, 50 38 T 100 20 T 150 28 T 200 15 L 200 60 L 0 60 Z"
+                          fill="url(#miniAreaGrad)"
+                        />
+                        <path
+                          d="M 0 45 Q 25 30, 50 38 T 100 20 T 150 28 T 200 15"
+                          fill="none"
+                          stroke="#d08968"
+                          strokeWidth="2"
+                        />
+                        <line x1="0" y1="12" x2="200" y2="12" stroke="#ef4444" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+                      </svg>
+                      <div className="flex justify-between font-mono text-[9px] text-soft mt-1">
+                        <span>-30s</span>
+                        <span className="text-danger font-semibold">Ceiling: 1,000 RPS</span>
+                        <span>Now</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Latency Breakdown */}
+                <div className="rounded-lg border border-line bg-paper p-3 text-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-ink flex items-center gap-1.5">
+                        <IconTelemetry size={14} className="text-copper" />
+                        Latency Percentiles
+                      </span>
+                      <span className="font-mono text-good font-bold">{Math.round(nodes.reduce((acc, n) => acc + (n.health === 'down' ? 0 : n.latency), 0) / Math.max(1, nodes.length))} ms avg</span>
+                    </div>
+                    <p className="text-[10px] text-soft">End-to-end roundtrip delay by percentile</p>
+
+                    <div className="mt-3 space-y-2 font-mono text-[10px]">
+                      <div>
+                        <div className="flex justify-between text-soft mb-0.5">
+                          <span>p50 (Median)</span>
+                          <span className="text-ink font-bold">12 ms</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-line overflow-hidden">
+                          <div className="h-full rounded-full bg-good w-[20%]" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-soft mb-0.5">
+                          <span>p90 (Standard)</span>
+                          <span className="text-ink font-bold">34 ms</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-line overflow-hidden">
+                          <div className="h-full rounded-full bg-copper w-[45%]" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-soft mb-0.5">
+                          <span>p99 (Tail Peak)</span>
+                          <span className="text-danger font-bold">68 ms</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-line overflow-hidden">
+                          <div className="h-full rounded-full bg-danger w-[75%]" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Traffic Composition */}
+                <div className="rounded-lg border border-line bg-paper p-3 text-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-ink flex items-center gap-1.5">
+                        <IconCache size={14} className="text-copper" />
+                        Traffic Breakdown
+                      </span>
+                      <span className="font-mono text-ink font-bold">{particles.length} in flight</span>
+                    </div>
+                    <p className="text-[10px] text-soft">Real-time classification of flowing packets</p>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-mono">
+                      <div className="rounded bg-raised p-1.5 border border-line/60">
+                        <span className="text-soft block text-[9px]">Cache Hits</span>
+                        <span className="font-bold text-good">
+                          {particles.filter((p) => p.type === 'cache_hit').length} pkts
+                        </span>
+                      </div>
+                      <div className="rounded bg-raised p-1.5 border border-line/60">
+                        <span className="text-soft block text-[9px]">DB Writes</span>
+                        <span className="font-bold text-amber-500">
+                          {particles.filter((p) => p.type === 'db_write').length} pkts
+                        </span>
+                      </div>
+                      <div className="rounded bg-raised p-1.5 border border-line/60">
+                        <span className="text-soft block text-[9px]">Blocked / 401</span>
+                        <span className="font-bold text-danger">
+                          {particles.filter((p) => p.type === 'blocked').length} pkts
+                        </span>
+                      </div>
+                      <div className="rounded bg-raised p-1.5 border border-line/60">
+                        <span className="text-soft block text-[9px]">HTTP Ingress</span>
+                        <span className="font-bold text-sky-400">
+                          {particles.filter((p) => p.type === 'request').length} pkts
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Flight Packet Audit Stream */}
+              <div className="rounded-lg border border-line bg-paper p-3 text-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-ink">Live Flight Packet Audit Ledger</span>
+                  <span className="text-[10px] font-mono text-soft">Showing recent wire transits • Click to inspect</span>
+                </div>
+
+                <div className="max-h-36 overflow-y-auto font-mono text-[11px] divide-y divide-line/40">
+                  {recentPacketLedger.length === 0 ? (
+                    <p className="py-2 text-center text-soft text-[11px]">Awaiting wire traffic...</p>
+                  ) : (
+                    recentPacketLedger.slice(0, 8).map((pkt) => (
+                      <div
+                        key={pkt.id}
+                        onClick={() => {
+                          setSelectedParticle(pkt);
+                          setFlowPaused(true);
+                        }}
+                        className="py-1.5 flex items-center justify-between hover:bg-raised px-2 rounded cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="text-copper font-bold">#{pkt.id}</span>
+                          <span className="truncate">{pkt.label}</span>
+                          <span className="text-[9px] text-soft">({pkt.sourceLabel} → {pkt.targetLabel})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-good">{pkt.latencyMs}ms</span>
+                          <span className="rounded bg-raised px-1 py-0.5 text-[9px] text-ink font-semibold">
+                            {pkt.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Connection Inspector Drawer */}
           {selectedConn && (
@@ -1628,8 +2074,10 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   <IconConnect size={18} />
                 </span>
                 <div>
-                  <h4 className="text-xs font-bold text-ink">
-                    Connection: {nodes.find((n) => n.id === selectedConn.from)?.label} ➔ {nodes.find((n) => n.id === selectedConn.to)?.label}
+                  <h4 className="flex items-center gap-1.5 text-xs font-bold text-ink">
+                    <span>Connection: {nodes.find((n) => n.id === selectedConn.from)?.label}</span>
+                    <IconArrowRight size={12} className="text-copper" />
+                    <span>{nodes.find((n) => n.id === selectedConn.to)?.label}</span>
                   </h4>
                   <p className="text-[11px] text-soft">Protocol: {selectedConn.protocol || "HTTPS / Dataflow"}</p>
                 </div>
@@ -1872,7 +2320,10 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           {/* Quick Guide Card */}
           <div className="rounded-xl border border-line bg-raised p-4 text-xs text-soft shadow-xs">
-            <h4 className="font-bold text-ink">💡 Systems Engineering Learning Principle</h4>
+            <h4 className="flex items-center gap-2 font-bold text-ink">
+              <IconPrinciple size={16} className="text-copper" />
+              <span>Systems Engineering Learning Principle</span>
+            </h4>
             <p className="mt-1 leading-relaxed">
               In modern distributed cloud architecture, every component must have a single clear responsibility. Direct connections between clients and databases expose credentials and crash under spikes. By inserting an API Gateway, an Auth Guard, and an App Logic Tier with in-memory caching, systems become resilient, secure, and observable.
             </p>

@@ -23,7 +23,11 @@ export async function GET(request: Request) {
     live,
     name: profile?.display_name || user.name,
     email: user.email,
-    role: profile?.role === "staff" ? "staff" : "student",
+    role: (profile?.role === "super_admin" || profile?.role === "staff")
+      ? profile.role
+      : (user.email && process.env.SUPER_ADMIN_EMAIL && user.email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase())
+      ? "super_admin"
+      : "student",
     consent: getConsent(user.id),
     xp: summary.xp,
     cases: summary.cases,

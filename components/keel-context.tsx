@@ -10,7 +10,7 @@ export type Me = {
   live: boolean;
   name?: string;
   email?: string;
-  role?: "staff" | "student";
+  role?: "super_admin" | "staff" | "student";
   consent?: boolean;
   xp?: number;
   cases?: number;

@@ -9,6 +9,7 @@ import { lessonFigures } from "@/lib/course/figures";
 import { Figure } from "@/components/figure";
 import { CaseForm } from "@/components/work";
 import { SectionScope } from "@/components/keel-context";
+import { SolutionsBreakdown } from "@/components/solutions-breakdown";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
@@ -58,6 +59,7 @@ export default async function BriefPage() {
         </ol>
         {locked ? <p className="mt-8 border-s-2 border-copper ps-4">{m.lockedBody}</p> : null}
         <CaseForm decisions={decisions} noteLabel={brief.noteLabel} noteHint={brief.noteHint} m={m} brief locked={locked} />
+        <SolutionsBreakdown defaultOpen={false} />
       </article>
     </SectionScope>
   );

@@ -82,12 +82,15 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
     }
   }
 
+  const isPrivileged = me?.role === "super_admin" || me?.role === "staff";
   const links = [
     ["/", m.programme],
     ["/course", m.cases],
     ["/foundry", m.foundry],
+    ["/analytics", m.analytics],
     ["/standing", m.standing],
     ["/dossier", m.dossier],
+    ...(isPrivileged ? [["/admin", m.adminPortal]] : []),
   ] as const;
 
   return (
@@ -130,7 +133,18 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
               <option value="dark">{m.themeDark}</option>
             </select>
             {me?.signedIn ? (
-              <Link className="max-w-32 truncate text-sm" href="/account">{me.name}</Link>
+              <div className="flex items-center gap-1.5">
+                <Link className="max-w-28 truncate text-sm" href="/account">{me.name}</Link>
+                {isPrivileged && (
+                  <Link
+                    href="/admin"
+                    className="rounded bg-copper/10 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-copper hover:bg-copper/20"
+                    title="Super Admin & Teacher Evaluation Portal"
+                  >
+                    Admin
+                  </Link>
+                )}
+              </div>
             ) : me ? (
               <Link className="text-sm" href="/sign-in">{m.signIn}</Link>
             ) : (
@@ -172,6 +186,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
       <footer className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 pb-36 text-sm text-soft">
         <span>{m.footer}</span>
         <span className="flex gap-4">
+          <Link href="/analytics">{m.analytics}</Link>
           <Link href="/data">{m.privacy}</Link>
           <Link href="/record">{m.record}</Link>
         </span>

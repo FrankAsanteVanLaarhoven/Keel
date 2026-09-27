@@ -11,7 +11,7 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"student" | "staff">("student");
+  const [role, setRole] = useState<"student" | "staff" | "super_admin">("student");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -61,9 +61,10 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
         </Field>
         {mode === "up" ? (
           <Field label={m.staffOrStudent}>
-            <select className="mt-1 w-full border border-line bg-raised px-3 py-2" value={role} onChange={(event) => setRole(event.target.value === "staff" ? "staff" : "student")}>
+            <select className="mt-1 w-full border border-line bg-raised px-3 py-2" value={role} onChange={(event) => setRole(event.target.value as "student" | "staff" | "super_admin")}>
               <option value="student">{m.roleStudent}</option>
               <option value="staff">{m.roleStaff}</option>
+              <option value="super_admin">Super Admin</option>
             </select>
           </Field>
         ) : null}
@@ -95,13 +96,30 @@ export function AccountPanel({ m }: { m: Messages }) {
 function AccountForm({ m, me, refresh }: { m: Messages; me: NonNullable<ReturnType<typeof useKeel>["me"]>; refresh: () => Promise<void> }) {
   const router = useRouter();
   const [name, setName] = useState(me.name ?? "");
-  const [role, setRole] = useState<"student" | "staff">(me.role ?? "student");
+  const [role, setRole] = useState<"student" | "staff" | "super_admin">(me.role ?? "student");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   return (
     <div className="mx-auto max-w-xl px-5 py-12">
       <h1 className="text-4xl font-medium tracking-tight">{m.accountTitle}</h1>
       <p className="mt-3 text-soft">{me.email}</p>
+      {(me.role === "super_admin" || me.role === "staff") && (
+        <div className="mt-6 border border-copper/40 bg-copper/5 p-4">
+          <p className="kicker text-copper">Privileged Access Granted</p>
+          <p className="mt-1 text-sm font-medium text-ink">
+            You hold {me.role === "super_admin" ? "Super Admin" : "Staff Teacher"} evaluation permissions.
+          </p>
+          <p className="mt-1 text-xs text-soft">
+            Audit student practical outcomes, inspect submitted architectural decisions, and manually override scores.
+          </p>
+          <Link
+            href="/admin"
+            className="mt-3 inline-block border border-ink bg-ink px-4 py-2 text-xs font-medium text-paper"
+          >
+            Open Teacher Evaluation Portal →
+          </Link>
+        </div>
+      )}
       <form
         className="mt-8 space-y-4"
         onSubmit={async (event) => {
@@ -119,9 +137,10 @@ function AccountForm({ m, me, refresh }: { m: Messages; me: NonNullable<ReturnTy
           <input className="mt-1 w-full border border-line bg-raised px-3 py-2" value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
         <Field label={m.role}>
-          <select className="mt-1 w-full border border-line bg-raised px-3 py-2" value={role} onChange={(event) => setRole(event.target.value === "staff" ? "staff" : "student")}>
+          <select className="mt-1 w-full border border-line bg-raised px-3 py-2" value={role} onChange={(event) => setRole(event.target.value as "student" | "staff" | "super_admin")}>
             <option value="student">{m.roleStudent}</option>
             <option value="staff">{m.roleStaff}</option>
+            <option value="super_admin">Super Admin (Master Answers & Evaluation)</option>
           </select>
         </Field>
         <button className="border border-ink px-4 py-2 text-sm" type="submit">{m.save}</button>

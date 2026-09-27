@@ -19,8 +19,16 @@ export function cleanName(input: string): string | null {
   return name;
 }
 
-export function cleanRole(input: unknown): "staff" | "student" {
-  return input === "staff" ? "staff" : "student";
+export function cleanRole(input: unknown): "super_admin" | "staff" | "student" {
+  if (input === "super_admin") return "super_admin";
+  if (input === "staff") return "staff";
+  return "student";
+}
+
+export function isStaffOrAdmin(role?: string | null, email?: string | null): boolean {
+  if (role === "super_admin" || role === "staff") return true;
+  if (email && process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase()) return true;
+  return false;
 }
 
 export function noteMinimum(locale: Locale): number {

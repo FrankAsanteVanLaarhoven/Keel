@@ -145,7 +145,7 @@ export function getProfile(userId: string) {
   );
 }
 
-export function setProfile(userId: string, displayName: string, role: "staff" | "student") {
+export function setProfile(userId: string, displayName: string, role: "super_admin" | "staff" | "student") {
   getDb()
     .prepare(
       `INSERT INTO keel_profile (user_id, display_name, role, created_at) VALUES (?, ?, ?, ?)
@@ -153,6 +153,8 @@ export function setProfile(userId: string, displayName: string, role: "staff" | 
     )
     .run(userId, displayName, role, Date.now());
 }
+
+export { getCohortSubmissions, updateTeacherEvaluation, type CohortSubmissionRecord } from "./db";
 
 export function exportFor(userId: string) {
   const db = getDb();

@@ -8,7 +8,9 @@ import { gradeAttempt } from "../lib/server/grade";
 import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
 import { matchAccept } from "../lib/locale";
-import { cacheControlFor, cleanName, clientDay, leaderboardSql, mayCacheStatic, noteOk, sameOrigin, utcWeekStart } from "../lib/security";
+import { cacheControlFor, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, sameOrigin, utcWeekStart } from "../lib/security";
+import { insertProfile } from "../lib/db";
+import { saveProgress, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import { localReply } from "../lib/tutor";
 import { ephemeralToken, responseText, takeVoiceEvent } from "../lib/voice-events";
 import { aiReply, hasTts, hasVoiceSession, liveEnabled, openrouterReply } from "../lib/server/live";
@@ -223,4 +225,86 @@ describe("ai provider and openrouter", () => {
     }
   });
 });
+
+describe("super admin & teacher evaluation ledger", () => {
+  it("validates role hierarchy and access checks", () => {
+    expect(cleanRole("super_admin")).toBe("super_admin");
+    expect(cleanRole("staff")).toBe("staff");
+    expect(cleanRole("student")).toBe("student");
+    expect(cleanRole("hacker")).toBe("student");
+
+    expect(isStaffOrAdmin("super_admin")).toBe(true);
+    expect(isStaffOrAdmin("staff")).toBe(true);
+    expect(isStaffOrAdmin("student")).toBe(false);
+    expect(isStaffOrAdmin(null)).toBe(false);
+
+    process.env.SUPER_ADMIN_EMAIL = "principal@keel.edu";
+    expect(isStaffOrAdmin("student", "principal@keel.edu")).toBe(true);
+    expect(isStaffOrAdmin("student", "other@keel.edu")).toBe(false);
+    delete process.env.SUPER_ADMIN_EMAIL;
+  });
+
+  it("records submissions and allows teacher evaluation overrides", () => {
+    insertProfile("student-42", "Ada Lovelace");
+    saveProgress({
+      userId: "student-42",
+      itemId: "harbor",
+      kind: "brief",
+      correct: false,
+      xp: 0,
+      detail: JSON.stringify({ choices: { tools: "shared" }, note: "Preliminary draft architecture." }),
+      day: "2026-09-28",
+    });
+
+    const submissions = getCohortSubmissions("brief");
+    const sub = submissions.find((s) => s.userId === "student-42" && s.itemId === "harbor");
+    expect(sub).toBeDefined();
+    expect(sub?.displayName).toBe("Ada Lovelace");
+    expect(sub?.score).toBe(0);
+    expect(sub?.verified).toBe(0);
+
+    // Teacher cross-checks and manually overrides grade with constructive feedback
+    updateTeacherEvaluation({
+      userId: "student-42",
+      itemId: "harbor",
+      kind: "brief",
+      score: 1,
+      xp: 200,
+      teacherFeedback: "Solid reasoning on tier boundaries. Approved upon manual oral defense.",
+      verified: 1,
+    });
+
+    const updated = getCohortSubmissions("brief").find((s) => s.userId === "student-42" && s.itemId === "harbor");
+    expect(updated?.score).toBe(1);
+    expect(updated?.xp).toBe(200);
+    expect(updated?.verified).toBe(1);
+    expect(updated?.teacherFeedback).toContain("Solid reasoning");
+  });
+
+  it("verifies architectural master key and solutions breakdown data integrity", async () => {
+    const { harborTierSolutions, harborDecisionsBreakdown, caseSolutionsList, foundryMissionSolutions } = await import(
+      "../lib/solutions"
+    );
+    const { briefAnswers, decisionAnswers } = await import("../lib/server/answers");
+
+    expect(harborTierSolutions.length).toBe(5);
+    expect(harborDecisionsBreakdown.length).toBe(11);
+    expect(caseSolutionsList.length).toBe(11);
+    expect(foundryMissionSolutions.length).toBe(5);
+
+    // Every brief decision must match the server ground truth
+    for (const d of harborDecisionsBreakdown) {
+      expect(d.optimalKey).toBe(briefAnswers[d.id]);
+    }
+
+    // Every case solution decisions must match server ground truth
+    for (const c of caseSolutionsList) {
+      const expected = decisionAnswers[c.sectionId as keyof typeof decisionAnswers];
+      for (const d of c.decisions) {
+        expect(d.optimalChoice).toBe(expected[d.questionId]);
+      }
+    }
+  });
+});
+
 
