@@ -117,15 +117,15 @@ const nodeTypeMeta: Record<
     desc: string;
   }
 > = {
-  client: { name: "Client / Browser", color: "#38bdf8", Icon: IconClient, tool: "Web / Mobile / React", desc: "User touchpoint that requests data and presents views." },
-  gateway: { name: "API Gateway / WAF", color: "#818cf8", Icon: IconGateway, tool: "Nginx / Envoy / Cloudflare", desc: "Routes traffic, terminates SSL, rate-limits, and shields backends." },
-  auth: { name: "Auth & Security Guard", color: "#ec4899", Icon: IconAuth, tool: "Better Auth / JWT / OAuth", desc: "Verifies session identity, issues tokens, checks permissions." },
-  compute: { name: "App Logic Tier", color: "#a855f7", Icon: IconCompute, tool: "Node.js / Go / Kubernetes Pod", desc: "Runs business rules, processes calculations, handles mutations." },
-  cache: { name: "Distributed Cache", color: "#10b981", Icon: IconCache, tool: "Redis / Memcached", desc: "Delivers sub-millisecond responses for repeatable read data." },
-  database: { name: "Authoritative Database", color: "#f59e0b", Icon: IconDatabase, tool: "PostgreSQL / SQLite", desc: "Durable persistent storage that records ground truth." },
-  queue: { name: "Message Broker / Queue", color: "#f97316", Icon: IconQueue, tool: "Kafka / RabbitMQ / SQS", desc: "Decouples spikes by buffering async jobs and payments." },
-  ci: { name: "CI/CD Pipeline Runner", color: "#06b6d4", Icon: IconCI, tool: "GitHub Actions / GitLab CI", desc: "Runs automated linting, unit tests, secret scanning before deploy." },
-  telemetry: { name: "Telemetry & SRE Agent", color: "#14b8a6", Icon: IconTelemetry, tool: "Prometheus / Grafana / OTel", desc: "Gathers logs, metrics, traces, and triggers actionable alerts." },
+  client: { name: "Client / Browser", color: "#1e293b", Icon: IconClient, tool: "Web / Mobile / React", desc: "User touchpoint that requests data and presents views." },
+  gateway: { name: "API Gateway / WAF", color: "#1e40af", Icon: IconGateway, tool: "Nginx / Envoy / Cloudflare", desc: "Routes traffic, terminates SSL, rate-limits, and shields backends." },
+  auth: { name: "Auth & Security Guard", color: "#831843", Icon: IconAuth, tool: "Better Auth / JWT / OAuth", desc: "Verifies session identity, issues tokens, checks permissions." },
+  compute: { name: "App Logic Tier", color: "#3730a3", Icon: IconCompute, tool: "Node.js / Go / Kubernetes Pod", desc: "Runs business rules, processes calculations, handles mutations." },
+  cache: { name: "Distributed Cache", color: "#065f46", Icon: IconCache, tool: "Redis / Memcached", desc: "Delivers sub-millisecond responses for repeatable read data." },
+  database: { name: "Authoritative Database", color: "#78350f", Icon: IconDatabase, tool: "PostgreSQL / SQLite", desc: "Durable persistent storage that records ground truth." },
+  queue: { name: "Message Broker / Queue", color: "#9a3412", Icon: IconQueue, tool: "Kafka / RabbitMQ / SQS", desc: "Decouples spikes by buffering async jobs and payments." },
+  ci: { name: "CI/CD Pipeline Runner", color: "#0f766e", Icon: IconCI, tool: "GitHub Actions / GitLab CI", desc: "Runs automated linting, unit tests, secret scanning before deploy." },
+  telemetry: { name: "Telemetry & SRE Agent", color: "#115e59", Icon: IconTelemetry, tool: "Prometheus / Grafana / OTel", desc: "Gathers logs, metrics, traces, and triggers actionable alerts." },
 };
 
 // 5 Rich Prebuilt Production Enterprise Practice Templates
@@ -1243,63 +1243,71 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
           <div className="rounded-xl border border-line bg-raised p-4 shadow-xs">
             <h2 className="text-xs font-bold uppercase tracking-wider text-ink">Live Telemetry HUD</h2>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded border border-line bg-paper p-2.5 shadow-xs">
-                <span className="text-[10px] uppercase font-bold text-soft">Availability</span>
-                <p className={`text-base font-bold ${availability > 90 ? "text-good" : "text-danger"}`}>
+              <div className="rounded-lg border border-line bg-paper p-2.5 shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-ink tracking-wider">Availability</span>
+                <p className={`text-lg font-mono font-bold mt-0.5 ${availability >= 90 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                   {availability}%
                 </p>
               </div>
-              <div className="rounded border border-line bg-paper p-2.5 shadow-xs">
-                <span className="text-[10px] uppercase font-bold text-soft">Avg Latency</span>
-                <p className={`text-base font-bold ${avgLatency < 50 ? "text-good" : "text-copper"}`}>
-                  {avgLatency}ms
+              <div className="rounded-lg border border-line bg-paper p-2.5 shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-ink tracking-wider">Avg Latency</span>
+                <p className="text-lg font-mono font-bold text-ink mt-0.5">
+                  {avgLatency}<span className="text-xs font-normal text-soft ms-0.5">ms</span>
                 </p>
               </div>
-              <div className="rounded border border-line bg-paper p-2.5 shadow-xs">
-                <span className="text-[10px] uppercase font-bold text-soft">Active Nodes</span>
-                <p className="text-base font-bold text-ink">{nodes.length}</p>
+              <div className="rounded-lg border border-line bg-paper p-2.5 shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-ink tracking-wider">Active Nodes</span>
+                <p className="text-lg font-mono font-bold text-ink mt-0.5">{nodes.length}</p>
               </div>
-              <div className="rounded border border-line bg-paper p-2.5 shadow-xs">
-                <span className="text-[10px] uppercase font-bold text-soft">Traffic Load</span>
-                <p className="text-base font-bold text-ink">{trafficMultiplier}x RPS</p>
+              <div className="rounded-lg border border-line bg-paper p-2.5 shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-ink tracking-wider">Traffic Load</span>
+                <p className="text-lg font-mono font-bold text-ink mt-0.5">{trafficMultiplier}x <span className="text-xs font-normal text-soft">RPS</span></p>
               </div>
             </div>
 
-            {/* High-Contrast Chaos & Testing Controls with Vector Icons */}
-            <h3 className="mt-4 text-xs font-bold uppercase tracking-wider text-ink">Chaos & Operational Testing</h3>
-            <div className="mt-2 space-y-1.5">
+            {/* High-Contrast Fault & Operational Testing Controls with Enterprise Vector Icons */}
+            <h3 className="mt-5 text-xs font-bold uppercase tracking-wider text-ink">Fault Injection & Simulation</h3>
+            <div className="mt-2.5 space-y-2">
               <button
                 onClick={() => setTrafficMultiplier((prev) => (prev >= 4 ? 1 : prev + 1))}
-                className="w-full rounded-md border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-copper hover:bg-raised transition-all flex items-center justify-between shadow-xs"
+                className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-ink hover:bg-raised transition-all flex items-center justify-between shadow-xs"
               >
                 <span className="flex items-center gap-2">
-                  <IconSurge size={16} className="text-copper" />
+                  <IconSurge size={16} className="text-ink" />
                   <span>Traffic Surge</span>
                 </span>
-                <span className="font-mono text-[10px] font-bold text-copper">{trafficMultiplier}x Load</span>
+                <span className="font-mono text-[10px] font-bold text-ink px-2 py-0.5 rounded bg-raised border border-line">
+                  {trafficMultiplier}x LOAD
+                </span>
               </button>
 
               <button
                 onClick={triggerChaos}
-                className="w-full rounded-md border border-danger/40 bg-paper px-3 py-2 text-xs text-left font-bold text-danger hover:bg-danger/10 transition-all flex items-center justify-between shadow-xs"
+                className="w-full rounded-lg border border-red-300 dark:border-red-800 bg-paper px-3 py-2 text-xs text-left font-bold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all flex items-center justify-between shadow-xs"
               >
                 <span className="flex items-center gap-2">
-                  <IconChaos size={16} className="text-danger" />
-                  <span>Fault Injection: Simulate Outage</span>
+                  <IconChaos size={16} className="text-red-700 dark:text-red-400" />
+                  <span>Fault Injection: Outage</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono">Simulate</span>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800">
+                  INJECT
+                </span>
               </button>
 
               <button
                 onClick={runCiPipeline}
-                className="w-full rounded-md border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-ink transition-all flex items-center justify-between shadow-xs"
+                className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-ink hover:bg-raised transition-all flex items-center justify-between shadow-xs"
               >
                 <span className="flex items-center gap-2">
                   <IconCI size={16} className="text-ink" />
                   <span>Trigger CI Pipeline</span>
                 </span>
-                <span className={`font-mono text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                  ciStatus === "passed" ? "bg-good/10 text-good" : ciStatus === "failed" ? "bg-danger/10 text-danger" : "bg-raised text-soft"
+                <span className={`font-mono text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                  ciStatus === "passed"
+                    ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                    : ciStatus === "failed"
+                      ? "bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-300 border-red-300 dark:border-red-800"
+                      : "bg-raised text-ink border-line"
                 }`}>
                   {ciStatus}
                 </span>
@@ -1307,24 +1315,28 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
               <button
                 onClick={autoHeal}
-                className="w-full rounded-md border border-good/40 bg-paper px-3 py-2 text-xs text-left font-bold text-good hover:bg-good/10 transition-all flex items-center justify-between shadow-xs"
+                className="w-full rounded-lg border border-emerald-300 dark:border-emerald-800 bg-paper px-3 py-2 text-xs text-left font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all flex items-center justify-between shadow-xs"
               >
                 <span className="flex items-center gap-2">
-                  <IconAutoHeal size={16} className="text-good" />
+                  <IconAutoHeal size={16} className="text-emerald-700 dark:text-emerald-400" />
                   <span>Auto-Heal & Restore</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono">Heal</span>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  RESTORE
+                </span>
               </button>
 
               <button
                 onClick={exportTopology}
-                className="w-full rounded-md border border-line bg-paper px-3 py-2 text-xs text-left font-medium text-ink hover:border-copper hover:bg-raised transition-all flex items-center justify-between shadow-xs"
+                className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-ink hover:bg-raised transition-all flex items-center justify-between shadow-xs"
               >
                 <span className="flex items-center gap-2">
                   <IconExport size={16} className="text-ink" />
                   <span>Export Architecture Spec</span>
                 </span>
-                <span className="text-[10px] text-soft font-mono">JSON</span>
+                <span className="font-mono text-[10px] font-bold text-ink px-2 py-0.5 rounded bg-raised border border-line">
+                  JSON
+                </span>
               </button>
             </div>
           </div>
@@ -2068,18 +2080,18 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           {/* Connection Inspector Drawer */}
           {selectedConn && (
-            <div className="flex items-center justify-between rounded-xl border border-line bg-raised p-4 shadow-xs">
+            <div className="flex items-center justify-between rounded-xl border border-line bg-paper p-4 shadow-xs">
               <div className="flex items-center gap-3">
-                <span className="text-copper">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-raised text-ink">
                   <IconConnect size={18} />
                 </span>
                 <div>
-                  <h4 className="flex items-center gap-1.5 text-xs font-bold text-ink">
+                  <h4 className="flex items-center gap-2 font-mono text-xs font-bold text-ink">
                     <span>Connection: {nodes.find((n) => n.id === selectedConn.from)?.label}</span>
-                    <IconArrowRight size={12} className="text-copper" />
+                    <IconArrowRight size={13} className="text-copper" />
                     <span>{nodes.find((n) => n.id === selectedConn.to)?.label}</span>
                   </h4>
-                  <p className="text-[11px] text-soft">Protocol: {selectedConn.protocol || "HTTPS / Dataflow"}</p>
+                  <p className="font-mono text-[11px] text-soft">Protocol: {selectedConn.protocol || "HTTPS / Dataflow"}</p>
                 </div>
               </div>
 
@@ -2090,7 +2102,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     setSelectedConnId(null);
                     setToast({ message: "Connection removed", type: "info" });
                   }}
-                  className="flex items-center gap-1.5 rounded border border-danger/40 bg-paper px-3 py-1.5 text-xs font-bold text-danger hover:bg-danger/10 transition-colors shadow-xs"
+                  className="flex items-center gap-1.5 rounded-lg border border-red-300 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/20 px-3.5 py-1.5 font-mono text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100/60 transition-colors shadow-xs"
                 >
                   <IconCut size={14} />
                   <span>Disconnect Wire</span>
@@ -2101,18 +2113,21 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           {/* Selected Node Inspector Drawer (Full CRUD) */}
           {selectedNode && (
-            <div className="rounded-xl border border-line bg-raised p-4 shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-copper">
+            <div className="rounded-xl border border-line bg-paper p-5 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-raised shadow-2xs"
+                    style={{ color: nodeTypeMeta[selectedNode.type].color }}
+                  >
                     {(() => {
                       const SelectedIcon = nodeTypeMeta[selectedNode.type].Icon;
-                      return <SelectedIcon size={22} />;
+                      return <SelectedIcon size={20} />;
                     })()}
-                  </span>
+                  </div>
                   <div>
-                    <h3 className="text-sm font-bold text-ink">{selectedNode.label}</h3>
-                    <p className="text-xs text-soft">{nodeTypeMeta[selectedNode.type].name}</p>
+                    <h3 className="font-mono text-sm font-bold text-ink tracking-tight">{selectedNode.label}</h3>
+                    <p className="font-mono text-xs text-soft">{nodeTypeMeta[selectedNode.type].name}</p>
                   </div>
                 </div>
 
@@ -2122,18 +2137,18 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                       setConnectFromId(selectedNode.id);
                       setToast({ message: "Click destination node to link arrow", type: "info" });
                     }}
-                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all shadow-xs ${
+                    className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 font-mono text-xs font-bold transition-all shadow-xs ${
                       connectFromId === selectedNode.id
-                        ? "border-copper bg-copper text-raised"
-                        : "border-line bg-paper text-ink hover:border-copper"
+                        ? "border-ink bg-ink text-paper"
+                        : "border-line bg-paper text-ink hover:border-ink hover:bg-raised"
                     }`}
                   >
                     <IconConnect size={14} />
-                    <span>{connectFromId === selectedNode.id ? "Connecting..." : "Connect Arrow"}</span>
+                    <span>{connectFromId === selectedNode.id ? "Connecting..." : "Connect Wire"}</span>
                   </button>
                   <button
                     onClick={deleteSelectedNode}
-                    className="flex items-center gap-1.5 rounded-lg border border-danger/40 bg-paper px-3 py-1.5 text-xs font-bold text-danger hover:bg-danger/10 transition-colors shadow-xs"
+                    className="flex items-center gap-1.5 rounded-lg border border-red-300 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/20 px-3.5 py-1.5 font-mono text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100/60 transition-colors shadow-xs"
                   >
                     <IconClear size={14} />
                     <span>Delete Node</span>
@@ -2144,23 +2159,27 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               {/* Node Customization Controls (CRUD Update) */}
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div>
-                  <label htmlFor="node-label" className="text-[10px] uppercase font-bold text-soft">Node Label</label>
+                  <label htmlFor="node-label" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
+                    Node Label
+                  </label>
                   <input
                     id="node-label"
                     type="text"
                     value={selectedNode.label}
                     onChange={(e) => updateSelectedNode("label", e.target.value)}
-                    className="mt-1 w-full rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink"
+                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="node-health" className="text-[10px] uppercase font-bold text-soft">Health Status</label>
+                  <label htmlFor="node-health" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
+                    Health Status
+                  </label>
                   <select
                     id="node-health"
                     value={selectedNode.health}
                     onChange={(e) => updateSelectedNode("health", e.target.value)}
-                    className="mt-1 w-full rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink"
+                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   >
                     <option value="healthy">Healthy (Operational)</option>
                     <option value="degraded">Degraded (High Latency)</option>
@@ -2169,7 +2188,9 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 </div>
 
                 <div>
-                  <label htmlFor="node-latency" className="text-[10px] uppercase font-bold text-soft">Latency (ms)</label>
+                  <label htmlFor="node-latency" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
+                    Latency (ms)
+                  </label>
                   <input
                     id="node-latency"
                     type="number"
@@ -2177,12 +2198,14 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     max="1000"
                     value={selectedNode.latency}
                     onChange={(e) => updateSelectedNode("latency", Number(e.target.value))}
-                    className="mt-1 w-full rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink"
+                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="node-rps" className="text-[10px] uppercase font-bold text-soft">RPS Capacity</label>
+                  <label htmlFor="node-rps" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
+                    RPS Capacity
+                  </label>
                   <input
                     id="node-rps"
                     type="number"
@@ -2190,8 +2213,22 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     max="50000"
                     value={selectedNode.capacity}
                     onChange={(e) => updateSelectedNode("capacity", Number(e.target.value))}
-                    className="mt-1 w-full rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink"
+                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   />
+                </div>
+              </div>
+
+              {/* Enterprise Architecture Metadata Footer */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-ink">Operational Role:</span>
+                  <span className="font-mono text-ink/80">{nodeTypeMeta[selectedNode.type].desc}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-ink">Enterprise Equivalent:</span>
+                  <span className="font-mono font-bold text-copper">
+                    {nodeTypeMeta[selectedNode.type].tool}
+                  </span>
                 </div>
               </div>
             </div>

@@ -461,7 +461,7 @@ export function IconArchitect({ size = 18, className = "", ...props }: IconProps
   );
 }
 
-// 16. Traffic Surge Icon (Exponential Load Wavefront Breaking Through Threshold)
+// 16. Traffic Surge Icon (Precision Step Load & Capacity Ceiling Ingress Telemetry)
 export function IconSurge({ size = 16, className = "", ...props }: IconProps) {
   return (
     <svg
@@ -477,18 +477,21 @@ export function IconSurge({ size = 16, className = "", ...props }: IconProps) {
       aria-hidden="true"
       {...props}
     >
-      {/* Provisioned capacity threshold line */}
-      <line x1="3" y1="6" x2="21" y2="6" strokeWidth="1.25" strokeDasharray="2 2" />
-      {/* Exponential traffic surge curve */}
-      <path d="M3 20c4-1 6-5 9-11 2 4 4 7 9 8" strokeWidth="1.75" strokeLinecap="round" />
-      {/* Spike penetration vector */}
-      <path d="M12 9V3" strokeWidth="1.75" strokeLinecap="round" />
-      <path d="m9.5 5.5 2.5-2.5 2.5 2.5" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Telemetry coordinate grid */}
+      <path d="M3 20h18" strokeWidth="1.75" />
+      <path d="M3 4v16" strokeWidth="1.75" />
+      {/* Rated SLA threshold ceiling line */}
+      <line x1="3" y1="8" x2="21" y2="8" strokeWidth="1" strokeDasharray="2 2" />
+      {/* Stepped traffic surge trajectory */}
+      <path d="M3 17h5v-4h5v-7h5" strokeWidth="1.75" />
+      {/* Directional ingress delta indicator */}
+      <path d="m16 4 2.5 2L16 8" strokeWidth="1.5" />
+      <circle cx="18" cy="6" r="1" fill="currentColor" />
     </svg>
   );
 }
 
-// 17. Chaos Disruption Icon (Controlled Network Partition & Fault Injection Pulse)
+// 17. Fault Injection Icon (Precision IEEE Circuit Breaker Relay / Contact Interrupter)
 export function IconChaos({ size = 16, className = "", ...props }: IconProps) {
   return (
     <svg
@@ -504,13 +507,17 @@ export function IconChaos({ size = 16, className = "", ...props }: IconProps) {
       aria-hidden="true"
       {...props}
     >
-      {/* Blast radius isolation perimeter */}
-      <circle cx="12" cy="12" r="9.5" strokeWidth="1.25" strokeDasharray="3 3" />
-      {/* Severed conduit boundary */}
-      <line x1="3" y1="12" x2="8" y2="12" strokeWidth="1.75" strokeLinecap="round" />
-      <line x1="16" y1="12" x2="21" y2="12" strokeWidth="1.75" strokeLinecap="round" />
-      {/* Fault injection pulse arc */}
-      <path d="m11 6-3 12 8-8-3 8" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Primary transmission bus terminals */}
+      <line x1="2" y1="12" x2="6.5" y2="12" strokeWidth="1.75" />
+      <circle cx="8" cy="12" r="1.5" strokeWidth="1.5" />
+      <circle cx="16" cy="12" r="1.5" strokeWidth="1.5" />
+      <line x1="17.5" y1="12" x2="22" y2="12" strokeWidth="1.75" />
+      {/* Tripped mechanical breaker blade (opened circuit) */}
+      <line x1="8" y1="12" x2="15" y2="5" strokeWidth="2" />
+      {/* Trip actuator fault indicator */}
+      <circle cx="12" cy="18" r="3.5" strokeWidth="1.25" strokeDasharray="1.5 1.5" />
+      <line x1="12" y1="16" x2="12" y2="18.5" strokeWidth="1.5" />
+      <circle cx="12" cy="20" r="0.6" fill="currentColor" />
     </svg>
   );
 }

@@ -9,7 +9,7 @@ import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
 import { matchAccept } from "../lib/locale";
 import { cacheControlFor, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, sameOrigin, utcWeekStart } from "../lib/security";
-import { insertProfile } from "../lib/db";
+import { insertProfile, wipeUser } from "../lib/db";
 import { saveProgress, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import { localReply } from "../lib/tutor";
 import { ephemeralToken, responseText, takeVoiceEvent } from "../lib/voice-events";
@@ -245,6 +245,7 @@ describe("super admin & teacher evaluation ledger", () => {
   });
 
   it("records submissions and allows teacher evaluation overrides", () => {
+    wipeUser("student-42");
     insertProfile("student-42", "Ada Lovelace");
     saveProgress({
       userId: "student-42",
