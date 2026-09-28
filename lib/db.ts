@@ -135,6 +135,17 @@ export function wipeUser(userId: string) {
   db.prepare(`DELETE FROM keel_like WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM keel_consent WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM keel_rate WHERE bucket LIKE ?`).run(`user:${safe}:%`);
+  try {
+    const reviews = db.prepare(`SELECT id FROM keel_review WHERE user_id = ?`).all(userId) as { id: string }[];
+    for (const review of reviews) db.prepare(`DELETE FROM keel_fingerprint WHERE review_id = ?`).run(review.id);
+    db.prepare(`DELETE FROM keel_review WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM keel_file WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM keel_rating WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM keel_survey WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM keel_attempt WHERE user_id = ?`).run(userId);
+  } catch {
+    /* tables appear with the class book */
+  }
 }
 
 export function recordAnalytics(eventType: string, entityId?: string, metadata?: Record<string, unknown>) {

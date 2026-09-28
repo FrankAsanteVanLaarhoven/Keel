@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { reviewDocument } from "../lib/review";
 import { termComplete, termGate, topCorrect, weeks } from "../lib/term";
 import { briefDecisions, sections } from "../lib/course/meta";
 import { en } from "../lib/course/en";
@@ -158,6 +159,25 @@ describe("operations programme", () => {
     for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
     const foundry = readFileSync(new URL("../components/foundry-lab.tsx", import.meta.url), "utf8");
     for (const section of opsSections) expect(foundry).toContain(`id: "${section.foundry}"`);
+  });
+});
+
+describe("local assessment review", () => {
+  const essay = "Question 1. Explain the web and the internet. Task: evaluate how a server answers a request and discuss the protocol. Submit your assessment answer with enough detail for a reader. ".repeat(6);
+
+  it("flags a peer copy and does not keep the words", () => {
+    const first = reviewDocument({ text: essay, weekBrief: "The web and the internet. Follow one request.", sha256: "a", peers: [] });
+    const second = reviewDocument({ text: essay, weekBrief: "The web and the internet. Follow one request.", sha256: "b", peers: [{ sha256: "a", shingles: first.shingles }] });
+    expect(first.assessment).toBe(true);
+    expect(second.plagiarism).toBe(true);
+    expect(second.match).toBe("peer");
+    expect(JSON.stringify(second)).not.toContain("Explain");
+  });
+
+  it("does not treat a short note as an assessment", () => {
+    const note = reviewDocument({ text: "hello there", weekBrief: "The web and the internet", sha256: "c", peers: [] });
+    expect(note.assessment).toBe(false);
+    expect(note.plagiarism).toBe(false);
   });
 });
 

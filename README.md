@@ -11,6 +11,8 @@ Keel is a learning programme for staff and students. It is two programmes on one
 3. Operator. Development and operations as one practice, automation, and the four DORA numbers: deployment frequency, lead time, change failure rate, and time to restore.
 4. Expert. Cost, trust, and value: a shared paid account, FinOps, and model spend that has to change an outcome someone uses.
 
+A written file for a week is read on this server and then discarded. Keel keeps a hash and three flags: whether it reads as an assessment, how much of that week's language it uses, and whether it matches another submission or the week brief. The words are not kept. Deleting the account removes those flags.
+
 A twelve-week term locks each week until the one before it is accepted. Teachers see every try and every miss, publish or pause the week's work, and students upload the files the week asks for. The standing board lists only the ten people with the most correct answers, and only when their wrong tries do not outnumber the correct ones. The certificate is written when all twelve weeks are accepted. A closing survey asks whether the term helped, why, what should be easier, and whether the learner would send a friend.
 
 Each level is step by step. You read, answer a check, run a lab that shows what your choice would actually send or commit or bill, and file an enterprise capstone. The same level also opens on the Foundry board: the status request, the pipeline, the night alert, and the traffic surge. Points, marks, and the standing board count the labs, the capstones, and a finished Foundry challenge. The release brief opens when all four capstones are accepted.

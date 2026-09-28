@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { TeachForms } from "@/components/term-desk";
-import { cohort, listAttempts, listWork } from "@/lib/classbook";
+import { allReviews, cohort, listAttempts, listWork } from "@/lib/classbook";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
@@ -75,6 +75,18 @@ export default async function TeachPage() {
             <span>{attempt.itemId} · {attempt.kind}</span>
             <span>{attempt.correct ? m.correct : m.notYet}</span>
             <time className="num text-soft">{new Date(attempt.createdAt).toISOString().slice(0, 16).replace("T", " ")}</time>
+          </li>
+        ))}
+      </ul>
+      <h2 className="mt-12 text-2xl font-medium">{m.reviewTitle}</h2>
+      <p className="mt-2 max-w-2xl text-sm text-soft">{m.reviewHold}</p>
+      <ul className="mt-4 divide-y divide-line border-y border-line">
+        {allReviews().map((review) => (
+          <li key={review.id} className="flex flex-wrap justify-between gap-3 py-3 text-sm">
+            <span>{review.name} · {review.weekId}</span>
+            <span>{review.assessment ? m.reviewAssessment : m.reviewNotAssessment}</span>
+            <span>{review.plagiarism ? m.reviewPlagiarism : m.reviewClear}</span>
+            <span className="num text-soft">{review.coverage}</span>
           </li>
         ))}
       </ul>

@@ -1,4 +1,4 @@
-import { filesFor, saveUpload } from "@/lib/classbook";
+import { filesFor, reviewAndDiscard, saveUpload } from "@/lib/classbook";
 import { json } from "@/lib/http";
 import { userFrom } from "@/lib/ready";
 import { isStaffOrAdmin } from "@/lib/security";
@@ -22,15 +22,13 @@ export async function POST(request: Request) {
   const file = form.get("file");
   if (!(file instanceof File)) return json({ error: "file" }, 400);
   const staff = isStaffOrAdmin(getProfile(user.id)?.role, user.email);
-  const scope = form.get("scope") === "class" && staff ? "class" : "own";
-  const saved = saveUpload({
-    weekId,
-    userId: user.id,
-    name: file.name,
-    mime: file.type || "application/octet-stream",
-    bytes: Buffer.from(await file.arrayBuffer()),
-    scope,
-  });
-  if (!saved) return json({ error: "file" }, 400);
-  return json({ file: saved });
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (form.get("scope") === "class" && staff) {
+    const saved = saveUpload({ weekId, userId: user.id, name: file.name, mime: file.type || "application/octet-stream", bytes, scope: "class" });
+    if (!saved) return json({ error: "file" }, 400);
+    return json({ file: saved });
+  }
+  const review = reviewAndDiscard({ weekId, userId: user.id, name: file.name, mime: file.type || "application/octet-stream", bytes });
+  if (!review) return json({ error: "file" }, 400);
+  return json({ review });
 }

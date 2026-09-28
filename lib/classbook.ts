@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { dataDir, getDb } from "./db";
+import { extractText, fileHash, reviewDocument, type ReviewResult } from "./review";
 import { weeks, type WorkWindow } from "./term";
 
 export type AttemptRow = { userId: string; itemId: string; kind: string; correct: boolean; createdAt: number };
@@ -85,7 +86,34 @@ export function ensureClassbook() {
       created_at INTEGER NOT NULL,
       used_by TEXT
     );
+    CREATE TABLE IF NOT EXISTS keel_review (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      week_id TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      bytes INTEGER NOT NULL,
+      assessment INTEGER NOT NULL,
+      coverage INTEGER NOT NULL,
+      plagiarism INTEGER NOT NULL,
+      similarity INTEGER NOT NULL,
+      match_kind TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_fingerprint (
+      review_id TEXT NOT NULL,
+      shingle TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS keel_fingerprint_shingle ON keel_fingerprint(shingle);
   `);
+  const own = db.prepare(`SELECT id FROM keel_file WHERE scope = 'own'`).all() as { id: string }[];
+  for (const row of own) {
+    db.prepare(`DELETE FROM keel_file WHERE id = ?`).run(row.id);
+    try {
+      unlinkSync(path.join(uploadsDir(), row.id));
+    } catch {
+      /* already gone */
+    }
+  }
   const count = db.prepare(`SELECT COUNT(*) AS count FROM keel_week_work`).get() as { count: number };
   if (count.count === 0) {
     const insert = db.prepare(
@@ -345,6 +373,138 @@ export function surveyFor(userId: string) {
     .get(userId) as { helped: number; why: string; better: string; ease: number; recommend: number } | undefined;
   if (!row) return null;
   return { helped: row.helped === 1, why: row.why, better: row.better, ease: row.ease, recommend: row.recommend === 1 };
+}
+
+export type HeldReview = {
+  id: string;
+  weekId: string;
+  userId: string;
+  name: string;
+  sha256: string;
+  assessment: boolean;
+  coverage: number;
+  plagiarism: boolean;
+  similarity: number;
+  match: ReviewResult["match"];
+  createdAt: number;
+};
+
+export function reviewAndDiscard(input: { weekId: string; userId: string; name: string; mime: string; bytes: Buffer }): HeldReview | null {
+  const week = weeks.find((item) => item.id === input.weekId);
+  if (!week) return null;
+  if (input.bytes.length < 1 || input.bytes.length > 4_000_000) return null;
+  ensureClassbook();
+  const work = workFor(input.weekId);
+  const text = extractText(input.bytes, input.mime, input.name);
+  const sha256 = fileHash(input.bytes);
+  const peers = peerPrints(input.weekId, input.userId);
+  const reviewed = reviewDocument({ text, weekBrief: `${week.title} ${week.promise} ${work?.brief ?? ""}`, sha256, peers });
+  const id = randomBytes(12).toString("hex");
+  const createdAt = Date.now();
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO keel_review (id, user_id, week_id, sha256, bytes, assessment, coverage, plagiarism, similarity, match_kind, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, input.userId, input.weekId, reviewed.sha256, input.bytes.length, reviewed.assessment ? 1 : 0, reviewed.coverage, reviewed.plagiarism ? 1 : 0, reviewed.similarity, reviewed.match, createdAt);
+  const insert = db.prepare(`INSERT INTO keel_fingerprint (review_id, shingle) VALUES (?, ?)`);
+  for (const shingle of reviewed.shingles) insert.run(id, shingle);
+  return {
+    id,
+    weekId: input.weekId,
+    userId: input.userId,
+    name: input.userId,
+    sha256: reviewed.sha256,
+    assessment: reviewed.assessment,
+    coverage: reviewed.coverage,
+    plagiarism: reviewed.plagiarism,
+    similarity: reviewed.similarity,
+    match: reviewed.match,
+    createdAt,
+  };
+}
+
+function peerPrints(weekId: string, userId: string): { sha256: string; shingles: string[] }[] {
+  const reviews = getDb()
+    .prepare(`SELECT id, sha256 FROM keel_review WHERE week_id = ? AND user_id != ?`)
+    .all(weekId, userId) as { id: string; sha256: string }[];
+  return reviews.map((review) => ({
+    sha256: review.sha256,
+    shingles: (getDb().prepare(`SELECT shingle FROM keel_fingerprint WHERE review_id = ?`).all(review.id) as { shingle: string }[]).map((row) => row.shingle),
+  }));
+}
+
+export function reviewsFor(weekId: string, userId: string, staff: boolean): HeldReview[] {
+  ensureClassbook();
+  const rows = getDb()
+    .prepare(
+      `SELECT id, user_id, week_id, sha256, assessment, coverage, plagiarism, similarity, match_kind, created_at
+       FROM keel_review WHERE week_id = ? ORDER BY created_at DESC`,
+    )
+    .all(weekId) as {
+    id: string;
+    user_id: string;
+    week_id: string;
+    sha256: string;
+    assessment: number;
+    coverage: number;
+    plagiarism: number;
+    similarity: number;
+    match_kind: ReviewResult["match"];
+    created_at: number;
+  }[];
+  return rows
+    .filter((row) => staff || row.user_id === userId)
+    .map((row) => ({
+      id: row.id,
+      weekId: row.week_id,
+      userId: staff ? row.user_id : "",
+      name: staff ? row.user_id : "",
+      sha256: row.sha256.slice(0, 12),
+      assessment: row.assessment === 1,
+      coverage: row.coverage,
+      plagiarism: row.plagiarism === 1,
+      similarity: row.similarity,
+      match: row.match_kind,
+      createdAt: row.created_at,
+    }));
+}
+
+export function allReviews(): HeldReview[] {
+  ensureClassbook();
+  const rows = getDb()
+    .prepare(
+      `SELECT r.id, r.user_id, r.week_id, r.sha256, r.assessment, r.coverage, r.plagiarism, r.similarity, r.match_kind, r.created_at,
+              coalesce(p.display_name, 'Learner') AS name
+       FROM keel_review r
+       LEFT JOIN keel_profile p ON p.user_id = r.user_id
+       ORDER BY r.created_at DESC LIMIT 80`,
+    )
+    .all() as {
+    id: string;
+    user_id: string;
+    week_id: string;
+    sha256: string;
+    assessment: number;
+    coverage: number;
+    plagiarism: number;
+    similarity: number;
+    match_kind: ReviewResult["match"];
+    created_at: number;
+    name: string;
+  }[];
+  return rows.map((row) => ({
+    id: row.id,
+    weekId: row.week_id,
+    userId: row.user_id,
+    name: row.name,
+    sha256: row.sha256.slice(0, 12),
+    assessment: row.assessment === 1,
+    coverage: row.coverage,
+    plagiarism: row.plagiarism === 1,
+    similarity: row.similarity,
+    match: row.match_kind,
+    createdAt: row.created_at,
+  }));
 }
 
 export function createInvite(userId: string): string {

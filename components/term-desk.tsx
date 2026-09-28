@@ -3,19 +3,24 @@
 import { useState } from "react";
 import type { Messages } from "@/lib/i18n/en";
 
+type ReviewRow = { id: string; assessment: boolean; coverage: number; plagiarism: boolean; similarity: number; match: string };
+
 export function WeekTools({
   weekId,
   files,
+  reviews,
   m,
 }: {
   weekId: string;
   files: { id: string; name: string; scope: string }[];
+  reviews: ReviewRow[];
   m: Messages;
 }) {
   const [note, setNote] = useState("");
   const [stars, setStars] = useState(5);
   const [status, setStatus] = useState("");
   const [invite, setInvite] = useState("");
+  const [latest, setLatest] = useState<ReviewRow | null>(null);
 
   return (
     <div className="mt-10 space-y-8">
@@ -29,21 +34,33 @@ export function WeekTools({
             const data = new FormData(event.currentTarget);
             data.set("weekId", weekId);
             const response = await fetch("/api/files", { method: "POST", body: data });
-            setStatus(response.ok ? m.saved : m.notYet);
-            if (response.ok) window.location.reload();
+            const body = (await response.json().catch(() => null)) as { review?: ReviewRow } | null;
+            if (!response.ok || !body?.review) {
+              setStatus(m.notYet);
+              return;
+            }
+            setLatest(body.review);
+            setStatus(m.reviewKept);
           }}
         >
           <input name="file" type="file" accept=".pdf,.txt,.md,.csv,.png,.jpg,.jpeg,.svg,.json,.docx" aria-label={m.upload} />
           <button className="border border-ink bg-ink px-4 py-2 text-sm text-paper" type="submit">{m.upload}</button>
         </form>
+        {latest ? <ReviewLine review={latest} m={m} /> : null}
         <ul className="mt-4 space-y-2">
-          {files.map((file) => (
-            <li key={file.id} className="flex flex-wrap items-center justify-between gap-3 border border-line px-3 py-2">
-              <a className="underline" href={`/api/files/${file.id}`}>{file.name}</a>
-              <span className="text-sm text-soft">{file.scope === "class" ? m.classFile : m.ownFile}</span>
+          {reviews.map((review) => (
+            <li key={review.id} className="border border-line px-3 py-2">
+              <ReviewLine review={review} m={m} />
             </li>
           ))}
-          {files.length === 0 ? <li className="text-sm text-soft">{m.noFiles}</li> : null}
+        </ul>
+        <ul className="mt-4 space-y-2">
+          {files.filter((file) => file.scope === "class").map((file) => (
+            <li key={file.id} className="flex flex-wrap items-center justify-between gap-3 border border-line px-3 py-2">
+              <a className="underline" href={`/api/files/${file.id}`}>{file.name}</a>
+              <span className="text-sm text-soft">{m.classFile}</span>
+            </li>
+          ))}
         </ul>
       </section>
       <section>
@@ -186,6 +203,22 @@ export function TeachForms({
       ))}
       {status ? <p role="status">{status}</p> : null}
     </div>
+  );
+}
+
+function ReviewLine({ review, m }: { review: ReviewRow; m: Messages }) {
+  const verdict = !review.assessment
+    ? m.reviewNotAssessment
+    : review.plagiarism
+      ? review.match === "brief"
+        ? m.reviewBrief
+        : m.reviewPlagiarism
+      : m.reviewClear;
+  return (
+    <p className="text-sm">
+      {verdict} <span className="num text-soft">{m.reviewCoverage} {review.coverage}</span>
+      {review.plagiarism ? <span className="num ms-3 text-soft">{review.similarity}</span> : null}
+    </p>
   );
 }
 

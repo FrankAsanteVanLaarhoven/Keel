@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WeekTools } from "@/components/term-desk";
-import { filesFor, listWork } from "@/lib/classbook";
+import { filesFor, listWork, reviewsFor } from "@/lib/classbook";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
@@ -30,6 +30,7 @@ export default async function WeekPage({ params }: { params: Promise<{ id: strin
   const window = workOpen(work, Date.now());
   const ready = staff || (window.open && (week.no === 1 || previousWeeksDone(week, rows)));
   const files = user ? filesFor(week.id, user.id, staff) : [];
+  const reviews = user ? reviewsFor(week.id, user.id, staff) : [];
   return (
     <article className="mx-auto w-full max-w-[42rem] px-5 pb-36 pt-10">
       <p className="kicker">{m.termNav} · {String(week.no).padStart(2, "0")}</p>
@@ -54,7 +55,7 @@ export default async function WeekPage({ params }: { params: Promise<{ id: strin
           );
         })}
       </ul>
-      {user && ready ? <WeekTools weekId={week.id} files={files} m={m} /> : null}
+      {user && ready ? <WeekTools weekId={week.id} files={files} reviews={reviews} m={m} /> : null}
       {!user ? <p className="mt-8"><Link className="underline" href="/sign-in">{m.signIn}</Link></p> : null}
     </article>
   );
