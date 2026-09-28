@@ -75,7 +75,7 @@ export function AnalyticsDashboard({ m, overview }: Props) {
       p90: 28,
       p99: 54,
       color: "#10b981",
-      status: "Enterprise SOTA",
+      status: "Within target",
     },
     {
       tier: "Zero-Trust Edge + Kafka Buffer",
@@ -170,7 +170,7 @@ export function AnalyticsDashboard({ m, overview }: Props) {
               Platform Benchmark & Architecture Analytics
             </h1>
             <p className="mt-1 text-sm text-soft">
-              Real-time architectural throughput, latency percentiles, student cohort mastery, and resilience telemetry setting state-of-the-art standards.
+              Throughput, latency, how far the cohort has got, and how the service recovers.
             </p>
           </div>
 
@@ -178,7 +178,7 @@ export function AnalyticsDashboard({ m, overview }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 rounded-full border border-good/30 bg-good/10 px-3 py-1 text-xs font-semibold text-good">
               <span className="h-1.5 w-1.5 rounded-full bg-good animate-pulse" />
-              SOTA Telemetry Stream
+              Live readings
             </span>
 
             <div className="inline-flex rounded-lg border border-line bg-paper p-0.5">
@@ -509,7 +509,7 @@ export function AnalyticsDashboard({ m, overview }: Props) {
         </div>
       </section>
 
-      {/* SOTA Core Web Vitals & Zero-Tracker Privacy Guarantee */}
+      {/* Core Web Vitals and privacy */}
       <section className="rounded-2xl border border-line bg-paper p-6 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
