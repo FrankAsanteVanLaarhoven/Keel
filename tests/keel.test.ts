@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { calendarIcs } from "../lib/calendar";
+import { projectFiles, servicePlan, zipStore } from "../lib/runpack";
 import { reviewDocument } from "../lib/review";
 import { termComplete, termGate, topCorrect, weeks } from "../lib/term";
 import { briefDecisions, sections } from "../lib/course/meta";
@@ -160,6 +161,29 @@ describe("operations programme", () => {
     for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
     const foundry = readFileSync(new URL("../components/foundry-lab.tsx", import.meta.url), "utf8");
     for (const section of opsSections) expect(foundry).toContain(`id: "${section.foundry}"`);
+  });
+});
+
+describe("runnable service", () => {
+  const nodes = [
+    { id: "desk", type: "client" },
+    { id: "door", type: "gateway" },
+    { id: "app", type: "compute" },
+    { id: "ledger", type: "database" },
+  ];
+  const edges = [
+    { from: "desk", to: "door" },
+    { from: "door", to: "app" },
+    { from: "app", to: "ledger" },
+  ];
+
+  it("accepts a desk that cannot see the database and refuses a direct wire", () => {
+    expect(servicePlan(nodes, edges).ok).toBe(true);
+    expect(servicePlan(nodes, [...edges, { from: "desk", to: "ledger" }]).ok).toBe(false);
+    const files = projectFiles(nodes, edges);
+    expect(files["server.js"]).toContain("Northline payments: open");
+    expect(files["server.js"]).not.toContain("LEDGER_KEY");
+    expect(zipStore(files).subarray(0, 2).toString()).toBe("PK");
   });
 });
 

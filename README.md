@@ -17,6 +17,8 @@ A twelve-week term locks each week until the one before it is accepted. Teachers
 
 Each level is step by step. You read, answer a check, run a lab that shows what your choice would actually send or commit or bill, and file an enterprise capstone. The same level also opens on the Foundry board: the status request, the pipeline, the night alert, and the traffic surge. Points, marks, and the standing board count the labs, the capstones, and a finished Foundry challenge. The release brief opens when all four capstones are accepted.
 
+A Foundry board that is wired as a service can be run on this machine. Sign in, choose Run this service, and open the status address it returns. Download the service if you want the same project as files: `node server.js`, then http://127.0.0.1:3970/status. The status line does not carry a ledger key. Accounts, progress, and review flags remain in SQLite.
+
 The cases are fictional. Keel teaches these foundations in its own words. Further reading, when a level names it, points at [DORA](https://dora.dev/), the [FinOps Foundation](https://www.finops.org/), and the [State of Tokenomics](https://www.tokeneconomics.com/state-of-tokenomics/).
 
 Frank Asante Van Laarhoven. Apache-2.0. See [LICENSE](LICENSE).

@@ -1103,6 +1103,45 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setToast({ message: "Architecture topology exported as JSON.", type: "success" });
   };
 
+  const runService = async (action: "run" | "download") => {
+    const response = await fetch("/api/project", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-keel": "1" },
+      body: JSON.stringify({
+        action,
+        nodes: nodes.map((node) => ({ id: node.id, type: node.type })),
+        connections: connections.map((edge) => ({ from: edge.from, to: edge.to })),
+      }),
+    });
+    if (response.status === 401) {
+      setToast({ message: "Sign in to run this service.", type: "error" });
+      return;
+    }
+    if (action === "download") {
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { reason?: string } | null;
+        setToast({ message: data?.reason || "The service file was not made.", type: "error" });
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "keel-service.zip";
+      link.click();
+      URL.revokeObjectURL(url);
+      setToast({ message: "Service downloaded. Run it with node server.js.", type: "success" });
+      return;
+    }
+    const data = (await response.json().catch(() => null)) as { url?: string; reason?: string } | null;
+    if (!response.ok || !data?.url) {
+      setToast({ message: data?.reason || "This board cannot run yet.", type: "error" });
+      return;
+    }
+    setToast({ message: data.url, type: "success" });
+    window.open(data.url, "_blank", "noopener");
+  };
+
   // Compute live system stats
   const healthyCount = nodes.filter((n) => n.health === "healthy").length;
   const availability = nodes.length ? Math.round((healthyCount / nodes.length) * 100) : 100;
@@ -1363,6 +1402,28 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 <span className="font-mono text-[10px] font-bold text-ink px-2 py-0.5 rounded bg-raised border border-line">
                   JSON
                 </span>
+              </button>
+
+              <button
+                onClick={() => void runService("run")}
+                className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-ink hover:bg-raised transition-all flex items-center justify-between shadow-xs"
+              >
+                <span className="flex items-center gap-2">
+                  <IconPlay size={16} className="text-ink" />
+                  <span>Run this service</span>
+                </span>
+                <span className="font-mono text-[10px] font-bold text-ink px-2 py-0.5 rounded bg-raised border border-line">LIVE</span>
+              </button>
+
+              <button
+                onClick={() => void runService("download")}
+                className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left font-semibold text-ink hover:border-ink hover:bg-raised transition-all flex items-center justify-between shadow-xs"
+              >
+                <span className="flex items-center gap-2">
+                  <IconExport size={16} className="text-ink" />
+                  <span>Download the service</span>
+                </span>
+                <span className="font-mono text-[10px] font-bold text-ink px-2 py-0.5 rounded bg-raised border border-line">ZIP</span>
               </button>
             </div>
           </div>
