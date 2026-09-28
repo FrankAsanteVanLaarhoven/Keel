@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { termComplete, termGate, topCorrect, weeks } from "../lib/term";
 import { briefDecisions, sections } from "../lib/course/meta";
 import { en } from "../lib/course/en";
 import { locales } from "../lib/locale";
@@ -157,6 +158,52 @@ describe("operations programme", () => {
     for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
     const foundry = readFileSync(new URL("../components/foundry-lab.tsx", import.meta.url), "utf8");
     for (const section of opsSections) expect(foundry).toContain(`id: "${section.foundry}"`);
+  });
+});
+
+describe("twelve week term", () => {
+  const done = (itemId: string, kind: string) => ({ itemId, kind, score: 1 });
+  it("keeps week two closed until week one is accepted", () => {
+    const closed = termGate({ itemId: "git", kind: "check", rows: [], staff: false, work: null, now: 0 });
+    const open = termGate({
+      itemId: "git",
+      kind: "check",
+      rows: [done("web", "check"), done("web", "lab"), done("web", "ops-case")],
+      staff: false,
+      work: null,
+      now: 0,
+    });
+    expect(closed.open).toBe(false);
+    expect(open.open).toBe(true);
+    expect(weeks).toHaveLength(12);
+  });
+
+  it("lets a teacher through a paused week and hides noisy scores", () => {
+    const paused = termGate({
+      itemId: "web",
+      kind: "check",
+      rows: [],
+      staff: false,
+      work: { status: "paused", opensAt: null, closesAt: null },
+      now: 0,
+    });
+    const teacher = termGate({
+      itemId: "web",
+      kind: "check",
+      rows: [],
+      staff: true,
+      work: { status: "paused", opensAt: null, closesAt: null },
+      now: 0,
+    });
+    expect(paused.open).toBe(false);
+    expect(teacher.open).toBe(true);
+    const board = topCorrect([
+      { userId: "a", name: "Ada", correct: 8, attempts: 10 },
+      { userId: "b", name: "Bea", correct: 9, attempts: 30 },
+      { userId: "c", name: "Cleo", correct: 4, attempts: 6 },
+    ]);
+    expect(board.map((row) => row.name)).toEqual(["Ada", "Cleo"]);
+    expect(termComplete([])).toBe(false);
   });
 });
 

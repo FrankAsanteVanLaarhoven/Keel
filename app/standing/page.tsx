@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
+import { attemptTotals } from "@/lib/classbook";
 import { currentUser } from "@/lib/ready";
-import { leaderboard, progressSummary } from "@/lib/store";
-import { utcWeekStart } from "@/lib/security";
+import { progressSummary } from "@/lib/store";
+import { topCorrect } from "@/lib/term";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
@@ -21,8 +22,13 @@ export default async function StandingPage() {
   const user = await currentUser();
   const today = new Date().toISOString().slice(0, 10);
   const summary = user ? progressSummary(user.id, today) : null;
-  const week = leaderboard(utcWeekStart(), user?.id);
-  const all = leaderboard(null, user?.id);
+  const board = topCorrect(attemptTotals()).map((row, index) => ({
+    rank: index + 1,
+    name: row.name,
+    xp: row.correct,
+    cases: row.attempts,
+    you: row.userId === user?.id,
+  }));
   const markLabels: Record<string, string> = {
     check: m.markCheck,
     bench: m.markBench,
@@ -39,7 +45,7 @@ export default async function StandingPage() {
     <div className="mx-auto max-w-6xl px-5 pb-28 pt-12">
       <p className="kicker">{m.standing}</p>
       <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-6xl">{m.standingTitle}</h1>
-      <p className="mt-4 max-w-2xl">{m.standingDeck}</p>
+      <p className="mt-4 max-w-2xl">{m.topTenNote}</p>
       {summary ? (
         <p className="mt-6 text-sm text-soft">
           <span className="num text-ink">{summary.xp}</span> {m.points}
@@ -53,8 +59,7 @@ export default async function StandingPage() {
         ))}
         {!summary?.marks.length ? <li className="text-soft">{m.noMarks}</li> : null}
       </ul>
-      <Board title={m.thisWeek} rows={week} m={m} />
-      <Board title={m.allTime} rows={all} m={m} />
+      <Board title={m.yourCorrect} rows={board} m={m} />
       <p className="mt-8 text-sm text-soft">{m.noEmail}</p>
     </div>
   );
@@ -67,7 +72,7 @@ function Board({
 }: {
   title: string;
   rows: { rank: number; name: string; xp: number; cases: number; you: boolean }[];
-  m: { place: string; displayName: string; points: string; cases: string; emptyBoard: string; yourRow: string };
+  m: { place: string; displayName: string; yourCorrect: string; attempts: string; emptyBoard: string; yourRow: string };
 }) {
   const top = Math.max(1, ...rows.map((row) => row.xp));
   return (
@@ -80,8 +85,8 @@ function Board({
             <tr>
               <th className="py-2 text-start font-normal">{m.place}</th>
               <th className="py-2 text-start font-normal">{m.displayName}</th>
-              <th className="py-2 text-start font-normal">{m.points}</th>
-              <th className="py-2 text-start font-normal">{m.cases}</th>
+              <th className="py-2 text-start font-normal">{m.yourCorrect}</th>
+              <th className="py-2 text-start font-normal">{m.attempts}</th>
             </tr>
           </thead>
           <tbody>

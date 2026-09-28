@@ -2,7 +2,7 @@ import { json } from "@/lib/http";
 import { opsIds } from "@/lib/ops/meta";
 import { liveEnabled } from "@/lib/server/live";
 import { userFrom } from "@/lib/ready";
-import { getConsent, getProfile, likeMap, progressSummary } from "@/lib/store";
+import { getConsent, getProfile, likeMap, progressSummary, setProfile } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -12,6 +12,10 @@ export async function GET(request: Request) {
   const live = liveEnabled();
   if (!user) return json({ signedIn: false, live, likes });
   const profile = getProfile(user.id);
+  const superEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase();
+  if (superEmail && user.email.toLowerCase() === superEmail && profile?.role !== "super_admin") {
+    setProfile(user.id, profile?.display_name || user.name || "Frank Asante Van Laarhoven", "super_admin");
+  }
   const summary = progressSummary(user.id, new Date().toISOString().slice(0, 10));
   const progress: Record<string, { check: boolean; bench: boolean; case: boolean }> = {};
   const ops: Record<string, { check: boolean; lab: boolean; case: boolean }> = {};

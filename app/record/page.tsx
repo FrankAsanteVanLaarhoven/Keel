@@ -5,6 +5,7 @@ import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
 import { getProfile, progressSummary } from "@/lib/store";
+import { termComplete } from "@/lib/term";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
@@ -26,6 +27,7 @@ export default async function RecordPage() {
   const summary = user ? progressSummary(user.id, new Date().toISOString().slice(0, 10)) : null;
   const done = Boolean(summary?.rows.some((row) => row.kind === "brief" && row.score === 1));
   const opsDone = Boolean(summary?.rows.some((row) => row.kind === "ops-brief" && row.score === 1));
+  const termDone = summary ? termComplete(summary.rows) : false;
   const profile = user ? getProfile(user.id) : null;
   const when = summary?.rows.find((row) => row.kind === "brief" && row.score === 1)?.updatedAt;
   const opsWhen = summary?.rows.find((row) => row.kind === "ops-brief" && row.score === 1)?.updatedAt;
@@ -55,6 +57,15 @@ export default async function RecordPage() {
           <p className="mt-6 text-sm text-soft">{m.recordDone}</p>
         </article>
       )}
+      {termDone ? (
+        <article className="mt-10 border border-ink px-8 py-10">
+          <p className="kicker">Keel</p>
+          <h2 className="mt-6 text-3xl font-medium">{m.certificateTitle}</h2>
+          <p className="mt-6 text-2xl">{profile?.display_name}</p>
+          <p className="mt-4 text-xl leading-8">{m.certificateLine}</p>
+          <p className="num mt-8 text-sm text-soft">{new Date().toISOString().slice(0, 10)}</p>
+        </article>
+      ) : null}
     </div>
   );
 }

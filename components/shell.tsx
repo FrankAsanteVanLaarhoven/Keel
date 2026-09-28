@@ -86,12 +86,13 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
   const links = [
     ["/", m.programme],
     ["/course", m.cases],
+    ["/term", m.termNav],
     ["/ops", m.opsNav],
     ["/foundry", m.foundry],
     ["/analytics", m.analytics],
     ["/standing", m.standing],
     ["/dossier", m.dossier],
-    ...(isPrivileged ? [["/admin", m.adminPortal]] : []),
+    ...(isPrivileged ? [["/teach", m.teachNav], ["/admin", m.adminPortal]] : []),
   ] as const;
 
   return (

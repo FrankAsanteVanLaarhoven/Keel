@@ -9,8 +9,10 @@ import { userFrom } from "@/lib/ready";
 import { gradeAttempt } from "@/lib/server/grade";
 import { gradeOps } from "@/lib/server/ops-grade";
 import { explain } from "@/lib/server/why";
-import { clientDay } from "@/lib/security";
-import { progressSummary, saveProgress } from "@/lib/store";
+import { recordAttempt, workFor } from "@/lib/classbook";
+import { termGate, weekForItem } from "@/lib/term";
+import { clientDay, isStaffOrAdmin } from "@/lib/security";
+import { getProfile, progressSummary, saveProgress } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -24,6 +26,21 @@ export async function POST(request: Request) {
   const opsSection = opsById(body.sectionId ?? "");
   if (kind !== "check" && kind !== "bench" && kind !== "case" && kind !== "brief" && !opsKind) return json({ error: "kind" }, 400);
   const locale = await resolveLocale();
+  const gradeItem = kind === "brief" ? "harbor" : kind === "ops-brief" ? "northline" : (body.sectionId ?? "");
+  const gradeKind = kind === "check" && opsSection ? "check" : (opsKind ?? kind ?? "");
+  const profile = user ? getProfile(user.id) : null;
+  const staff = isStaffOrAdmin(profile?.role, user?.email);
+  const rows = user ? progressSummary(user.id, clientDay(body.day)).rows : [];
+  const week = weekForItem(gradeItem, gradeKind);
+  const gate = termGate({
+    itemId: gradeItem,
+    kind: gradeKind,
+    rows,
+    staff,
+    work: week ? workFor(week.id) : null,
+    now: Date.now(),
+  });
+  if (!gate.open) return json({ correct: false, locked: true, saved: false, why: [] });
   if (opsKind || (kind === "check" && opsSection)) {
     const opsGradeKind = kind === "check" ? "check" : opsKind;
     if (!opsGradeKind || (opsGradeKind !== "ops-brief" && !opsSection)) return json({ error: "section" }, 404);
@@ -56,6 +73,7 @@ export async function POST(request: Request) {
       });
       saved = record.saved;
     }
+    if (user && !result.locked) recordAttempt({ userId: user.id, itemId: opsGradeKind === "ops-brief" ? "northline" : (body.sectionId as string), kind: opsGradeKind, correct: result.correct });
     return json({
       correct: result.correct,
       saved,
@@ -89,6 +107,7 @@ export async function POST(request: Request) {
     });
     saved = record.saved && result.correct;
   }
+  if (user && !result.locked) recordAttempt({ userId: user.id, itemId: kind === "brief" ? "harbor" : (body.sectionId as string), kind, correct: result.correct });
   return json({
     correct: result.correct,
     saved,
