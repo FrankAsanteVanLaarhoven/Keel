@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Messages } from "@/lib/i18n/en";
 import { useKeel } from "./keel-context";
+import { Shown } from "./wording";
 
 type Option = { id: string; text: string };
 type Decision = { id: string; prompt: string; options: Option[] };
@@ -54,12 +55,12 @@ export function CheckForm({
     >
       <h2 className="text-2xl font-medium">{m.check}</h2>
       <fieldset className="mt-4">
-        <legend className="text-lg">{prompt}</legend>
+        <legend className="text-lg"><Shown text={prompt} /></legend>
         <div className="mt-4 space-y-2">
           {options.map((option) => (
             <label key={option.id} className="flex items-start gap-3 border border-line bg-raised px-3 py-3">
               <input className="mt-1" type="radio" name="choice" value={option.id} checked={choice === option.id} onChange={() => setChoice(option.id)} />
-              <span>{option.text}</span>
+              <span><Shown text={option.text} /></span>
             </label>
           ))}
         </div>
@@ -122,7 +123,7 @@ export function BenchForm({
       }}
     >
       <h1 className="text-4xl font-medium tracking-tight">{title}</h1>
-      <p className="mt-4 text-lg">{prompt}</p>
+      <p className="mt-4 text-lg"><Shown text={prompt} /></p>
       {kind === "order" ? (
         <ol className="mt-6 space-y-2">
           {order.map((id, index) => (
@@ -245,7 +246,7 @@ export function CaseForm({
         <fieldset key={decision.id} className="mt-8">
           <legend className="text-lg">
             <span className="num me-2 text-soft">{String(index + 1).padStart(2, "0")}</span>
-            {decision.prompt}
+            <Shown text={decision.prompt} />
           </legend>
           <Radios
             name={decision.id}
@@ -277,7 +278,7 @@ function Radios({ name, options, value, onChange }: { name: string; options: Opt
       {options.map((option) => (
         <label key={option.id} className="flex items-start gap-3 border border-line bg-raised px-3 py-3">
           <input className="mt-1" type="radio" name={name} value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} />
-          <span>{option.text}</span>
+          <span><Shown text={option.text} /></span>
         </label>
       ))}
     </div>

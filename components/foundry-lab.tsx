@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Messages } from "@/lib/i18n/en";
 import { useKeel } from "./keel-context";
+import { roomPlain, wordingText } from "@/lib/glossary";
+import { useWording } from "./wording";
 import {
   IconClient,
   IconGateway,
@@ -33,6 +35,27 @@ import {
   IconPause,
   IconAnalytics,
 } from "./icons";
+
+function NodeWords({ label, role, tool, type, bare }: { label: string; role: string; tool: string; type: string; bare?: boolean }) {
+  const mode = useWording();
+  if (bare) return <>{wordingText(label, mode)}</>;
+  if (mode === "plain") return <p className="mt-1 truncate text-xs font-bold text-zinc-100">{roomPlain[type] || wordingText(label, mode)}</p>;
+  if (mode === "expand") {
+    return (
+      <>
+        <p className="mt-1 text-xs font-bold text-zinc-100">{wordingText(label, mode)}</p>
+        <p className="text-[10px] text-zinc-400">{wordingText(tool, mode)}</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="mt-1 truncate text-xs font-bold text-zinc-100">{label}</p>
+      <p className="truncate text-[10px] text-zinc-300">{tool.split("/")[0]}</p>
+      <p className="sr-only">{role}</p>
+    </>
+  );
+}
 
 export type NodeType =
   | "client"
@@ -1892,17 +1915,17 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     />
                   </div>
 
-                  <p className="mt-1 truncate text-xs font-bold text-zinc-100">{node.label}</p>
-                  <p className="truncate text-[10px] text-zinc-400">{meta.name.split("/")[0]}</p>
+                  <NodeWords label={node.label} role={node.role} tool={node.industryTool} type={node.type} />
+                  <p className="truncate text-[10px] text-zinc-400"><NodeWords label={meta.name.split("/")[0] ?? ""} role="" tool="" type="" bare /></p>
 
                   <div className="mt-2 flex items-center justify-between border-t border-zinc-700/60 pt-1.5 text-[9px] text-zinc-400">
-                    <span className="font-mono text-zinc-300">{node.latency}ms</span>
-                    <span className="font-mono text-zinc-300">{node.rps} rps</span>
+                    <span className="font-mono text-zinc-300"><NodeWords bare label={`${node.latency} ms`} role="" tool="" type="" /></span>
+                    <span className="font-mono text-zinc-300"><NodeWords bare label={`${node.rps} rps`} role="" tool="" type="" /></span>
                   </div>
 
                   {showTooltips && (
                     <div className="mt-1 rounded bg-black/60 px-1 py-0.5 text-center font-mono text-[8px] text-zinc-400 truncate">
-                      {node.industryTool.split("/")[0]}
+                      <NodeWords label={node.industryTool.split("/")[0] ?? ""} role="" tool="" type="" bare />
                     </div>
                   )}
                 </div>

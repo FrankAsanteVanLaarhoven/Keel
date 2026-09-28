@@ -9,6 +9,7 @@ import { Mark } from "./mark";
 import { KeelState, useKeel, type Scope } from "./keel-context";
 import { VoiceDock } from "./voice-dock";
 import { CharacterBackdrop } from "./character-backdrop";
+import { WordingProvider, WordingSelect } from "./wording";
 import { authClient } from "@/lib/auth-client";
 
 const languageNames: Record<Locale, string> = {
@@ -96,6 +97,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
   ] as const;
 
   return (
+    <WordingProvider>
     <>
       <a className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-paper focus:px-3 focus:py-2" href="#content">
         {m.skip}
@@ -128,6 +130,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
                 <option key={item} value={item}>{languageNames[item]}</option>
               ))}
             </select>
+            <WordingSelect label={m.wordingLabel} industry={m.wordingIndustry} plain={m.wordingPlain} expand={m.wordingExpand} />
             <label className="sr-only" htmlFor="theme">{m.theme}</label>
             <select id="theme" className="bg-transparent text-sm" value={theme} onChange={(event) => chooseTheme(event.target.value)} aria-label={m.theme}>
               <option value="system">{m.themeSystem}</option>
@@ -196,6 +199,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
       <VoiceDock locale={locale} m={m} scope={scope} consent={Boolean(me?.consent || consentChoice === "voice")} live={Boolean(me?.live)} />
       <span className="sr-only">{htmlLang(locale)} {dirFor(locale)}</span>
     </>
+    </WordingProvider>
   );
 }
 

@@ -7,6 +7,7 @@ import { previewFlags, webWire, type LabFields } from "@/lib/ops/preview";
 import type { OpsId } from "@/lib/ops/meta";
 import { useKeel } from "./keel-context";
 import { CaseForm, CheckForm, LikeButton, postGrade } from "./work";
+import { Shown } from "./wording";
 
 type Option = { id: string; text: string };
 type Field = { id: string; kind: "order" | "single" | "multi"; prompt: string; options: Option[]; start?: string[] };
@@ -78,8 +79,8 @@ export function OpsWalk({ model, m }: { model: OpsWalkModel; m: Messages }) {
       <p className="kicker">
         {model.level} · {m.section} {model.no} · {model.minutes} {m.minutes}
       </p>
-      <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-5xl">{model.title}</h1>
-      <p className="mt-4 text-xl leading-snug">{model.promise}</p>
+      <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-5xl"><Shown text={model.title} /></h1>
+      <p className="mt-4 text-xl leading-snug"><Shown text={model.promise} /></p>
       <ol className="mt-8 flex flex-wrap gap-2" aria-label={m.steps}>
         {steps.map((item, index) => (
           <li key={item.id}>
@@ -112,7 +113,7 @@ export function OpsWalk({ model, m }: { model: OpsWalkModel; m: Messages }) {
           <ul className="mt-3 space-y-2">
             {model.objectives.map((item) => (
               <li key={item} className="border-s border-copper ps-4">
-                {item}
+                <Shown text={item} />
               </li>
             ))}
           </ul>
@@ -161,14 +162,14 @@ export function OpsWalk({ model, m }: { model: OpsWalkModel; m: Messages }) {
           <h2 className="mt-3 text-2xl font-medium">{model.caseTitle}</h2>
           {model.caseSituation.map((paragraph) => (
             <p key={paragraph} className="mt-4 leading-8">
-              {paragraph}
+              <Shown text={paragraph} />
             </p>
           ))}
           <h3 className="mt-8 text-xl font-medium">{m.task}</h3>
           <p className="mt-3">{model.caseTask}</p>
           <ol className="mt-4 list-decimal space-y-2 ps-5">
             {model.caseSteps.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item}><Shown text={item} /></li>
             ))}
           </ol>
           <p className="mt-4 text-sm text-soft">{m.fictional}</p>
@@ -210,7 +211,7 @@ function Prose({ heading, paragraphs }: { heading: string; paragraphs: string[] 
       <h2 className="text-2xl font-medium tracking-tight">{heading}</h2>
       {paragraphs.map((paragraph) => (
         <p key={paragraph} className="mt-3 text-[1.05rem] leading-8">
-          {paragraph}
+          <Shown text={paragraph} />
         </p>
       ))}
     </section>
@@ -269,7 +270,7 @@ function LabForm({ model, m, onDone }: { model: OpsWalkModel; m: Messages; onDon
       <p className="mt-2 text-lg">{model.labTitle}</p>
       {model.labScene.map((paragraph) => (
         <p key={paragraph} className="mt-3 leading-8">
-          {paragraph}
+          <Shown text={paragraph} />
         </p>
       ))}
       {model.fields.map((field) => (

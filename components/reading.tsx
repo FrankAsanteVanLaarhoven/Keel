@@ -5,6 +5,7 @@ import type { SectionCopy } from "@/lib/course/types";
 import type { Locale } from "@/lib/locale";
 import type { Messages } from "@/lib/i18n/en";
 import { Figure } from "./figure";
+import { Shown } from "./wording";
 import { CheckForm, LikeButton } from "./work";
 
 export function Reading({
@@ -26,13 +27,13 @@ export function Reading({
       <p className="kicker">
         {m.section} {meta.no} · {meta.minutes} {m.minutes}
       </p>
-      <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-5xl">{copy.title}</h1>
-      <p className="mt-4 text-xl leading-snug text-ink">{copy.promise}</p>
+      <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-5xl"><Shown text={copy.title} /></h1>
+      <p className="mt-4 text-xl leading-snug text-ink"><Shown text={copy.promise} /></p>
       <h2 className="kicker mt-10">{m.objectives}</h2>
       <ul className="mt-3 space-y-2">
         {copy.objectives.map((item) => (
           <li key={item} className="border-s border-copper ps-4">
-            {item}
+            <Shown text={item} />
           </li>
         ))}
       </ul>
@@ -73,7 +74,7 @@ function Section({ heading, paragraphs }: { heading: string; paragraphs: string[
       <h2 className="text-2xl font-medium tracking-tight">{heading}</h2>
       {paragraphs.map((paragraph) => (
         <p key={paragraph} className="mt-3 text-[1.05rem] leading-8">
-          {paragraph}
+          <Shown text={paragraph} />
         </p>
       ))}
     </section>

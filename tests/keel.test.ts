@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { wordingText } from "../lib/glossary";
 import { calendarIcs } from "../lib/calendar";
 import { projectFiles, servicePlan, zipStore } from "../lib/runpack";
 import { reviewDocument } from "../lib/review";
@@ -161,6 +162,18 @@ describe("operations programme", () => {
     for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
     const foundry = readFileSync(new URL("../components/foundry-lab.tsx", import.meta.url), "utf8");
     for (const section of opsSections) expect(foundry).toContain(`id: "${section.foundry}"`);
+  });
+});
+
+describe("wording toggle", () => {
+  it("keeps industry terms, simplifies them, and spells abbreviations out", () => {
+    const sentence = "HTTP carries the request. TCP checks the packets. IP moves them. DORA counts the releases.";
+    expect(wordingText(sentence, "industry")).toBe(sentence);
+    expect(wordingText(sentence, "plain")).toContain("the web request rules");
+    expect(wordingText(sentence, "plain")).not.toContain("HTTP");
+    expect(wordingText(sentence, "expand")).toContain("Hypertext Transfer Protocol");
+    expect(wordingText("shipping", "plain")).toBe("shipping");
+    expect(wordingText("HTTPS", "plain")).not.toContain("HTTP (");
   });
 });
 
