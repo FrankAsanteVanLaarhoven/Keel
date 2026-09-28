@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { calendarIcs } from "../lib/calendar";
 import { reviewDocument } from "../lib/review";
 import { termComplete, termGate, topCorrect, weeks } from "../lib/term";
 import { briefDecisions, sections } from "../lib/course/meta";
@@ -159,6 +160,25 @@ describe("operations programme", () => {
     for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
     const foundry = readFileSync(new URL("../components/foundry-lab.tsx", import.meta.url), "utf8");
     for (const section of opsSections) expect(foundry).toContain(`id: "${section.foundry}"`);
+  });
+});
+
+describe("calendar import", () => {
+  it("lists a deadline and a download name without a student file", () => {
+    const ics = calendarIcs([
+      {
+        uid: "keel-w01@keel",
+        start: Date.UTC(2026, 9, 2, 16, 0),
+        end: Date.UTC(2026, 9, 2, 17, 0),
+        title: "Week 1, status",
+        details: "Downloads: status-brief.pdf",
+        url: "http://127.0.0.1:3960/term/w01",
+      },
+    ]);
+    expect(ics).toContain("BEGIN:VCALENDAR");
+    expect(ics).toContain("SUMMARY:Week 1\\, status");
+    expect(ics).toContain("status-brief.pdf");
+    expect(ics).not.toContain("student-essay");
   });
 });
 

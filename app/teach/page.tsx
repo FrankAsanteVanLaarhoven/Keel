@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { TeachForms } from "@/components/term-desk";
+import { PublishDesk, TeachForms } from "@/components/term-desk";
 import { allReviews, cohort, listAttempts, listWork } from "@/lib/classbook";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
@@ -90,6 +90,10 @@ export default async function TeachPage() {
           </li>
         ))}
       </ul>
+      <h2 className="mt-12 text-2xl font-medium">{m.newCourse}</h2>
+      <p className="mt-2 max-w-2xl text-sm text-soft">{m.calendarHelp}</p>
+      <p className="mt-3"><a className="underline" href="/api/calendar">{m.calendarImport}</a></p>
+      <PublishDesk m={m} />
       <h2 className="mt-12 text-2xl font-medium">{m.workTitle}</h2>
       <TeachForms work={work} m={m} />
     </div>

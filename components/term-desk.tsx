@@ -9,11 +9,13 @@ export function WeekTools({
   weekId,
   files,
   reviews,
+  classScope,
   m,
 }: {
   weekId: string;
   files: { id: string; name: string; scope: string }[];
   reviews: ReviewRow[];
+  classScope?: boolean;
   m: Messages;
 }) {
   const [note, setNote] = useState("");
@@ -33,7 +35,13 @@ export function WeekTools({
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             data.set("weekId", weekId);
+            if (classScope) data.set("scope", "class");
             const response = await fetch("/api/files", { method: "POST", body: data });
+            if (classScope) {
+              setStatus(response.ok ? m.saved : m.notYet);
+              if (response.ok) window.location.reload();
+              return;
+            }
             const body = (await response.json().catch(() => null)) as { review?: ReviewRow } | null;
             if (!response.ok || !body?.review) {
               setStatus(m.notYet);
@@ -116,6 +124,83 @@ export function WeekTools({
       </section>
       {invite ? <p className="text-sm">{invite}</p> : null}
       {status ? <p className="border-s-2 border-copper ps-4" role="status">{status}</p> : null}
+    </div>
+  );
+}
+
+export function PublishDesk({ m }: { m: Messages }) {
+  const [status, setStatus] = useState("");
+  async function send(payload: Record<string, unknown>) {
+    const response = await fetch("/api/teach", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-keel": "1" },
+      body: JSON.stringify(payload),
+    });
+    setStatus(response.ok ? m.saved : m.notYet);
+    if (response.ok) window.location.reload();
+  }
+  return (
+    <div className="mt-8 grid gap-8 md:grid-cols-2">
+      <form
+        className="border border-line p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          void send({
+            action: "course",
+            title: data.get("title"),
+            summary: data.get("summary"),
+            status: data.get("status"),
+            opensAt: data.get("opens") ? Date.parse(String(data.get("opens"))) : null,
+            closesAt: data.get("closes") ? Date.parse(String(data.get("closes"))) : null,
+          });
+        }}
+      >
+        <h3 className="text-xl font-medium">{m.newCourse}</h3>
+        <label className="mt-3 block text-sm">{m.workTitle}<input className="mt-1 w-full border border-line bg-paper px-3 py-2" name="title" required /></label>
+        <label className="mt-3 block text-sm">{m.courseSummary}<textarea className="mt-1 min-h-24 w-full border border-line bg-paper px-3 py-2" name="summary" required /></label>
+        <StatusFields m={m} />
+        <button className="mt-3 border border-ink bg-ink px-4 py-2 text-sm text-paper" type="submit">{m.publish}</button>
+      </form>
+      <form
+        className="border border-line p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          void send({
+            action: "announce",
+            title: data.get("title"),
+            body: data.get("body"),
+            status: data.get("status"),
+            publishAt: data.get("opens") ? Date.parse(String(data.get("opens"))) : Date.now(),
+          });
+        }}
+      >
+        <h3 className="text-xl font-medium">{m.announcement}</h3>
+        <label className="mt-3 block text-sm">{m.workTitle}<input className="mt-1 w-full border border-line bg-paper px-3 py-2" name="title" required /></label>
+        <label className="mt-3 block text-sm">{m.announceBody}<textarea className="mt-1 min-h-24 w-full border border-line bg-paper px-3 py-2" name="body" required /></label>
+        <StatusFields m={m} />
+        <button className="mt-3 border border-ink bg-ink px-4 py-2 text-sm text-paper" type="submit">{m.publish}</button>
+      </form>
+      {status ? <p role="status">{status}</p> : null}
+    </div>
+  );
+}
+
+function StatusFields({ m }: { m: Messages }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-3">
+      <label className="text-sm">
+        {m.workStatus}
+        <select className="ms-2 border border-line bg-paper px-2 py-1" name="status" defaultValue="published">
+          <option value="draft">{m.draft}</option>
+          <option value="scheduled">{m.schedule}</option>
+          <option value="published">{m.publish}</option>
+          <option value="paused">{m.pause}</option>
+        </select>
+      </label>
+      <label className="text-sm">{m.opens}<input className="ms-2 border border-line bg-paper px-2 py-1" name="opens" type="datetime-local" /></label>
+      <label className="text-sm">{m.closes}<input className="ms-2 border border-line bg-paper px-2 py-1" name="closes" type="datetime-local" /></label>
     </div>
   );
 }

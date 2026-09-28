@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listWork, ratings } from "@/lib/classbook";
+import { listAnnouncements, listCourses, listWork, ratings } from "@/lib/classbook";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
@@ -28,6 +28,10 @@ export default async function TermPage() {
       <p className="kicker">{m.termNav}</p>
       <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-6xl">{m.termTitle}</h1>
       <p className="mt-4 max-w-2xl text-lg">{m.termDeck}</p>
+      <p className="mt-4"><a className="underline" href="/api/calendar">{m.calendarImport}</a></p>
+      <p className="mt-2 max-w-2xl text-sm text-soft">{m.calendarHelp}</p>
+      <Announcements m={m} />
+      <Courses m={m} />
       {suggestion.next ? (
         <p className="mt-6">
           {m.next}: <Link className="underline" href={`/term/${suggestion.next.id}`}>{suggestion.next.title}</Link>
@@ -68,5 +72,41 @@ export default async function TermPage() {
         <Link className="underline" href="/survey">{m.surveyTitle}</Link>
       </p>
     </div>
+  );
+}
+
+function Announcements({ m }: { m: ReturnType<typeof t> }) {
+  const notes = listAnnouncements().filter((note) => note.status === "published");
+  if (!notes.length) return null;
+  return (
+    <section className="mt-10">
+      <h2 className="text-2xl font-medium">{m.announcement}</h2>
+      <ul className="mt-4 space-y-4">
+        {notes.map((note) => (
+          <li key={note.id} className="border border-line px-4 py-3">
+            <p className="font-medium">{note.title}</p>
+            <p className="mt-2">{note.body}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function Courses({ m }: { m: ReturnType<typeof t> }) {
+  const courses = listCourses().filter((course) => workOpen(course, Date.now()).open);
+  return (
+    <section className="mt-10">
+      <h2 className="text-2xl font-medium">{m.publishedCourses}</h2>
+      {courses.length === 0 ? <p className="mt-3 text-soft">{m.noCourses}</p> : null}
+      <ul className="mt-4 divide-y divide-line border-y border-line">
+        {courses.map((course) => (
+          <li key={course.id} className="py-4">
+            <Link className="text-xl font-medium" href={`/term/course/${course.id}`}>{course.title}</Link>
+            <p className="mt-2 text-soft">{course.summary}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

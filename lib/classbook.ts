@@ -104,6 +104,26 @@ export function ensureClassbook() {
       shingle TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS keel_fingerprint_shingle ON keel_fingerprint(shingle);
+    CREATE TABLE IF NOT EXISTS keel_course (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      status TEXT NOT NULL,
+      opens_at INTEGER,
+      closes_at INTEGER,
+      updated_at INTEGER NOT NULL,
+      updated_by TEXT
+    );
+    CREATE TABLE IF NOT EXISTS keel_announcement (
+      id TEXT PRIMARY KEY,
+      course_id TEXT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL,
+      publish_at INTEGER,
+      updated_at INTEGER NOT NULL,
+      updated_by TEXT
+    );
   `);
   const own = db.prepare(`SELECT id FROM keel_file WHERE scope = 'own'`).all() as { id: string }[];
   for (const row of own) {
@@ -259,7 +279,7 @@ function uploadsDir() {
 }
 
 export function saveUpload(input: { weekId: string; userId: string; name: string; mime: string; bytes: Buffer; scope: "class" | "own" }): ClassFile | null {
-  if (!weeks.some((week) => week.id === input.weekId)) return null;
+  if (!weeks.some((week) => week.id === input.weekId) && !courseById(input.weekId)) return null;
   if (!allowed.has(input.mime)) return null;
   if (input.bytes.length < 1 || input.bytes.length > 4_000_000) return null;
   const clean = input.name.replace(/[^\w.\- ()]/g, "").slice(0, 80);
@@ -505,6 +525,77 @@ export function allReviews(): HeldReview[] {
     match: row.match_kind,
     createdAt: row.created_at,
   }));
+}
+
+export type CourseRow = WorkWindow & { id: string; title: string; summary: string };
+export type AnnouncementRow = { id: string; courseId: string; title: string; body: string; status: WorkWindow["status"]; publishAt: number | null };
+
+export function listCourses(): CourseRow[] {
+  ensureClassbook();
+  const rows = getDb()
+    .prepare(`SELECT id, title, summary, status, opens_at, closes_at FROM keel_course ORDER BY updated_at DESC`)
+    .all() as { id: string; title: string; summary: string; status: WorkWindow["status"]; opens_at: number | null; closes_at: number | null }[];
+  return rows.map((row) => ({ id: row.id, title: row.title, summary: row.summary, status: row.status, opensAt: row.opens_at, closesAt: row.closes_at }));
+}
+
+export function courseById(id: string): CourseRow | null {
+  return listCourses().find((course) => course.id === id) ?? null;
+}
+
+export function saveCourse(input: { id?: string; title: string; summary: string; status: WorkWindow["status"]; opensAt: number | null; closesAt: number | null; userId: string }): string | null {
+  const title = input.title.trim().slice(0, 120);
+  const summary = input.summary.trim().slice(0, 2000);
+  if (title.length < 2 || summary.length < 2) return null;
+  ensureClassbook();
+  const id = input.id && courseById(input.id) ? input.id : `c${randomBytes(6).toString("hex")}`;
+  getDb()
+    .prepare(
+      `INSERT INTO keel_course (id, title, summary, status, opens_at, closes_at, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET title = excluded.title, summary = excluded.summary, status = excluded.status, opens_at = excluded.opens_at, closes_at = excluded.closes_at, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    )
+    .run(id, title, summary, input.status, input.opensAt, input.closesAt, Date.now(), input.userId);
+  return id;
+}
+
+export function deleteCourse(id: string): boolean {
+  if (!courseById(id)) return false;
+  ensureClassbook();
+  getDb().prepare(`DELETE FROM keel_course WHERE id = ?`).run(id);
+  getDb().prepare(`DELETE FROM keel_announcement WHERE course_id = ?`).run(id);
+  return true;
+}
+
+export function listAnnouncements(): AnnouncementRow[] {
+  ensureClassbook();
+  const rows = getDb()
+    .prepare(`SELECT id, course_id, title, body, status, publish_at FROM keel_announcement ORDER BY coalesce(publish_at, updated_at) DESC`)
+    .all() as { id: string; course_id: string | null; title: string; body: string; status: WorkWindow["status"]; publish_at: number | null }[];
+  return rows.map((row) => ({ id: row.id, courseId: row.course_id ?? "", title: row.title, body: row.body, status: row.status, publishAt: row.publish_at }));
+}
+
+export function saveAnnouncement(input: { id?: string; courseId: string; title: string; body: string; status: WorkWindow["status"]; publishAt: number | null; userId: string }): string | null {
+  const title = input.title.trim().slice(0, 140);
+  const body = input.body.trim().slice(0, 2000);
+  if (title.length < 2 || body.length < 2) return null;
+  ensureClassbook();
+  const id = input.id && listAnnouncements().some((item) => item.id === input.id) ? input.id : `a${randomBytes(6).toString("hex")}`;
+  getDb()
+    .prepare(
+      `INSERT INTO keel_announcement (id, course_id, title, body, status, publish_at, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET course_id = excluded.course_id, title = excluded.title, body = excluded.body, status = excluded.status, publish_at = excluded.publish_at, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    )
+    .run(id, input.courseId || null, title, body, input.status, input.publishAt, Date.now(), input.userId);
+  return id;
+}
+
+export function deleteAnnouncement(id: string): boolean {
+  ensureClassbook();
+  const row = getDb().prepare(`SELECT id FROM keel_announcement WHERE id = ?`).get(id);
+  if (!row) return false;
+  getDb().prepare(`DELETE FROM keel_announcement WHERE id = ?`).run(id);
+  return true;
 }
 
 export function createInvite(userId: string): string {
