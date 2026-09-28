@@ -11,7 +11,7 @@ let database: DatabaseSync | null = null;
 export function getDb(): DatabaseSync {
   if (database) return database;
   mkdirSync(dataDir, { recursive: true });
-  const db = new DatabaseSync(path.join(dataDir, "keel.db"));
+  const db = new DatabaseSync(path.join(dataDir, "keel.db"), { timeout: 5000 });
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(`
