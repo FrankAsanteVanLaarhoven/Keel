@@ -3,8 +3,12 @@ import type { Locale } from "../locale";
 import { voiceLanguage } from "../locale";
 import { ephemeralToken, responseText } from "../voice-events";
 
+function openRouterKey(): string | undefined {
+  return process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_KEY || undefined;
+}
+
 export function liveEnabled(): boolean {
-  return Boolean(process.env.OPENROUTER_API_KEY || process.env.XAI_API_KEY);
+  return Boolean(openRouterKey() || process.env.XAI_API_KEY);
 }
 
 export function hasTts(): boolean {
@@ -56,7 +60,7 @@ export async function speakText(text: string, locale: Locale): Promise<ArrayBuff
 }
 
 export async function openrouterReply(instructions: string, message: string): Promise<string> {
-  const key = process.env.OPENROUTER_API_KEY;
+  const key = openRouterKey();
   if (!key) throw new Error("no_key");
   const model = process.env.OPENROUTER_MODEL || "x-ai/grok-4.7";
   const appUrl = process.env.BETTER_AUTH_URL || "https://keel.learn";
@@ -103,7 +107,7 @@ export async function directXaiReply(instructions: string, message: string): Pro
 }
 
 export async function aiReply(instructions: string, message: string): Promise<string> {
-  if (process.env.OPENROUTER_API_KEY) {
+  if (openRouterKey()) {
     try {
       return await openrouterReply(instructions, message);
     } catch (err) {
