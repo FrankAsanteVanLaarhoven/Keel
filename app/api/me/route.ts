@@ -45,6 +45,7 @@ export async function GET(request: Request) {
     brief: summary.rows.some((row) => row.kind === "brief" && row.score === 1),
     ops,
     opsBrief: summary.rows.some((row) => row.kind === "ops-brief" && row.score === 1),
+    foundryDone: summary.rows.filter((row) => row.kind === "foundry" && row.score === 1).map((row) => row.itemId),
     likes,
   });
 }

@@ -83,6 +83,7 @@ export default async function OpsLevelPage({ params }: { params: Promise<{ id: s
           previousId: previous,
           nextHref: next === "brief" ? "/ops/brief" : next ? `/ops/${next}` : "/ops",
           nextLabel: nextCopy ? nextCopy.title : pack.brief.title,
+          foundryId: meta.foundry,
           blocked: Boolean(previous && user && !done(previous, "ops-case")),
           saved: { check: done(meta.id, "check"), lab: done(meta.id, "lab"), case: done(meta.id, "ops-case") },
         }}

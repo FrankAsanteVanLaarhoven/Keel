@@ -44,6 +44,7 @@ export type OpsWalkModel = {
   previousId: OpsId | null;
   nextHref: string;
   nextLabel: string;
+  foundryId: string;
   blocked: boolean;
   saved: { check: boolean; lab: boolean; case: boolean };
 };
@@ -194,7 +195,11 @@ export function OpsWalk({ model, m }: { model: OpsWalkModel; m: Messages }) {
         <Link className="border border-line px-4 py-2 text-sm" href={model.nextHref}>
           {m.next}: {model.nextLabel}
         </Link>
+        <Link className="border border-line px-4 py-2 text-sm" href={`/foundry?challenge=${model.foundryId}`}>
+          {m.openFoundry}
+        </Link>
       </div>
+      <p className="mt-4 text-sm text-soft">{m.foundryStep}</p>
     </article>
   );
 }
@@ -401,14 +406,16 @@ function Preview({ model, m, fields, warn }: { model: OpsWalkModel; m: Messages;
   );
 }
 
-export function OpsMarks({ id, m }: { id: string; m: Messages }) {
+export function OpsMarks({ id, foundryId, m }: { id: string; foundryId: string; m: Messages }) {
   const { me } = useKeel();
   const row = me?.ops?.[id];
+  const foundry = Boolean(me?.foundryDone?.includes(foundryId));
   return (
     <p className="text-sm text-soft">
       <span>{row?.check ? "●" : "○"} {m.check}</span>
       <span className="ms-3">{row?.lab ? "●" : "○"} {m.liveLab}</span>
       <span className="ms-3">{row?.case ? "●" : "○"} {m.capstone}</span>
+      <span className="ms-3">{foundry ? "●" : "○"} {m.foundry}</span>
     </p>
   );
 }

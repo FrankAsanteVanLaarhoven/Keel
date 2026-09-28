@@ -155,6 +155,8 @@ describe("operations programme", () => {
       expect(pack.brief.steps).toHaveLength(4);
     }
     for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
+    const foundry = readFileSync(new URL("../components/foundry-lab.tsx", import.meta.url), "utf8");
+    for (const section of opsSections) expect(foundry).toContain(`id: "${section.foundry}"`);
   });
 });
 

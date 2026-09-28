@@ -11,7 +11,7 @@ Keel is a learning programme for staff and students. It is two programmes on one
 3. Operator. Development and operations as one practice, automation, and the four DORA numbers: deployment frequency, lead time, change failure rate, and time to restore.
 4. Expert. Cost, trust, and value: a shared paid account, FinOps, and model spend that has to change an outcome someone uses.
 
-Each level is step by step. You read, answer a check, run a lab that shows what your choice would actually send or commit or bill, and file an enterprise capstone. Points, marks, and the standing board count the labs and the capstones. The release brief opens when all four capstones are accepted.
+Each level is step by step. You read, answer a check, run a lab that shows what your choice would actually send or commit or bill, and file an enterprise capstone. The same level also opens on the Foundry board: the status request, the pipeline, the night alert, and the traffic surge. Points, marks, and the standing board count the labs, the capstones, and a finished Foundry challenge. The release brief opens when all four capstones are accepted.
 
 The cases are fictional. Keel teaches these foundations in its own words. Further reading, when a level names it, points at [DORA](https://dora.dev/), the [FinOps Foundation](https://www.finops.org/), and the [State of Tokenomics](https://www.tokeneconomics.com/state-of-tokenomics/).
 

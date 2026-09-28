@@ -253,6 +253,8 @@ export const en = {
   weekLab: "Run the lab and read what the system would actually do.",
   weekFile: "File the capstone in your own words.",
   further: "Further reading",
+  openFoundry: "Open this on the foundry board",
+  foundryStep: "Build the same idea on the live architecture board.",
 };
 
 export type Messages = typeof en;

@@ -44,7 +44,10 @@ export default async function OpsPage() {
                 <p className="kicker">{levelName[section.level]}</p>
                 <Link className="text-2xl font-medium" href={`/ops/${section.id}`}>{copy.title}</Link>
                 <p className="mt-2 max-w-2xl text-soft">{copy.promise}</p>
-                <OpsMarks id={section.id} m={m} />
+                <OpsMarks id={section.id} foundryId={section.foundry} m={m} />
+                <p className="mt-3">
+                  <Link className="text-sm underline decoration-line underline-offset-4" href={`/foundry?challenge=${section.foundry}`}>{m.openFoundry}</Link>
+                </p>
               </div>
             </li>
           );

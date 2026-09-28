@@ -16,6 +16,7 @@ export type OpsMeta = {
   no: string;
   minutes: number;
   level: OpsLevel;
+  foundry: string;
   checkIds: [string, string, string, string];
   lab: LabField[];
   decisions: [DecisionMeta, DecisionMeta, DecisionMeta];
@@ -27,6 +28,7 @@ export const opsSections: OpsMeta[] = [
     no: "01",
     minutes: 50,
     level: "ease",
+    foundry: "c6_status",
     checkIds: ["cables", "documents", "bothsame", "browser"],
     lab: [
       {
@@ -50,6 +52,7 @@ export const opsSections: OpsMeta[] = [
     no: "02",
     minutes: 45,
     level: "practice",
+    foundry: "c3_cicd",
     checkIds: ["git", "github", "deploy", "monitor"],
     lab: [
       { id: "files", kind: "multi", optionIds: ["readme", "source", "env", "dist", "tmp"] },
@@ -67,6 +70,7 @@ export const opsSections: OpsMeta[] = [
     no: "03",
     minutes: 50,
     level: "operator",
+    foundry: "c5_observability",
     checkIds: ["one", "four", "twelve", "none"],
     lab: [
       { id: "code", kind: "single", optionIds: ["dev", "ops", "auto"] },
@@ -88,6 +92,7 @@ export const opsSections: OpsMeta[] = [
     no: "04",
     minutes: 45,
     level: "expert",
+    foundry: "c4_scale",
     checkIds: ["large", "value", "vendor", "shared"],
     lab: [
       { id: "ci", kind: "single", optionIds: ["keep", "cap", "stop"] },

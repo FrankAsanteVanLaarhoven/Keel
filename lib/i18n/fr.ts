@@ -255,4 +255,6 @@ export const fr: Messages = {
   weekLab: "Lancez le laboratoire et lisez ce que le système ferait.",
   weekFile: "Rédigez le cas avec vos mots.",
   further: "Pour aller plus loin",
+  openFoundry: "Ouvrir ceci sur le tableau de l'atelier",
+  foundryStep: "Construisez la même idée sur le tableau d'architecture en direct.",
 };

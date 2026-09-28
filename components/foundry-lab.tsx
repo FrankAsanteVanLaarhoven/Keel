@@ -83,7 +83,7 @@ interface Particle {
   description: string;
 }
 
-type ChallengeId = "freeform" | "c1_security" | "c2_design" | "c3_cicd" | "c4_scale" | "c5_observability";
+type ChallengeId = "freeform" | "c1_security" | "c2_design" | "c3_cicd" | "c4_scale" | "c5_observability" | "c6_status";
 
 interface Challenge {
   id: ChallengeId;
@@ -393,6 +393,32 @@ const CHALLENGES: Challenge[] = [
         return f?.type === "telemetry" || t?.type === "telemetry";
       });
       return hasTelemetry && linked;
+    },
+  },
+  {
+    id: "c6_status",
+    course: "CSC3131",
+    courseTitle: "Development & Operations of Systems",
+    badge: "CSC3131",
+    title: "Challenge 6: The Status Request",
+    goal: "The payments desk asks for /status. The browser must not touch the ledger. Put a gateway between the desk and the application, and keep the database behind the application.",
+    hint: "Wire Client → Gateway → App, and App → Database. There must be no wire from the client to the database.",
+    initialNodes: [
+      { id: "c6-desk", type: "client", label: "Payments Desk", x: 80, y: 180, health: "healthy", latency: 12, capacity: 200, rps: 20, role: "Status Page", industryTool: "Browser" },
+      { id: "c6-db", type: "database", label: "Ledger", x: 760, y: 180, health: "healthy", latency: 40, capacity: 400, rps: 0, role: "Key and Records", industryTool: "PostgreSQL" },
+    ],
+    initialConnections: [],
+    checkSuccess: (nodes, conns) => {
+      const hasGateway = nodes.some((n) => n.type === "gateway");
+      const hasApp = nodes.some((n) => n.type === "compute");
+      const linked = (from: string, to: string) =>
+        conns.some((c) => {
+          const f = nodes.find((n) => n.id === c.from);
+          const t = nodes.find((n) => n.id === c.to);
+          return f?.type === from && t?.type === to;
+        });
+      const clientToDb = linked("client", "database") || linked("database", "client");
+      return hasGateway && hasApp && linked("client", "gateway") && linked("gateway", "compute") && linked("compute", "database") && !clientToDb;
     },
   },
 ];

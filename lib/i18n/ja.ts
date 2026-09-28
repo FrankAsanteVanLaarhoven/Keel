@@ -255,4 +255,6 @@ export const ja: Messages = {
   weekLab: "実験を動かし、システムが実際に何をするか読みます。",
   weekFile: "自分の言葉で事例を書きます。",
   further: "さらに読む",
+  openFoundry: "工房の盤でこれを開く",
+  foundryStep: "同じ考えを、動いている設計盤の上に組む。",
 };

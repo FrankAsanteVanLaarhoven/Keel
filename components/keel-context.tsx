@@ -20,6 +20,7 @@ export type Me = {
   brief?: boolean;
   ops?: Record<string, { check: boolean; lab: boolean; case: boolean }>;
   opsBrief?: boolean;
+  foundryDone?: string[];
   likes: Record<string, { count: number; mine: boolean }>;
 };
 

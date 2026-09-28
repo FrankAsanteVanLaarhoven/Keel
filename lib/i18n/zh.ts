@@ -255,4 +255,6 @@ export const zh: Messages = {
   weekLab: "运行实验，看系统实际会做什么。",
   weekFile: "用自己的话写下案例。",
   further: "延伸阅读",
+  openFoundry: "在工坊画板上打开",
+  foundryStep: "在实时架构画板上搭出同一个想法。",
 };
