@@ -1,4 +1,5 @@
 import type { Locale } from "../locale";
+import { explainOps } from "./ops-why";
 
 const en: Record<string, string> = {
   "tools.check": "Version history lets two people change the same work without one of them erasing the other.",
@@ -555,5 +556,9 @@ const ar: Record<string, string> = {
 const lines: Record<Locale, Record<string, string>> = { en, es, fr, de, pt, zh, ja, ar };
 
 export function explain(locale: Locale, id: string): string {
-  return lines[locale]?.[id] ?? lines.en[id] ?? "";
+  const local = lines[locale]?.[id];
+  if (local) return local;
+  const ops = explainOps(locale, id);
+  if (ops) return ops;
+  return lines.en[id] ?? "";
 }

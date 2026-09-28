@@ -1,4 +1,5 @@
 import { json } from "@/lib/http";
+import { opsIds } from "@/lib/ops/meta";
 import { liveEnabled } from "@/lib/server/live";
 import { userFrom } from "@/lib/ready";
 import { getConsent, getProfile, likeMap, progressSummary } from "@/lib/store";
@@ -13,7 +14,14 @@ export async function GET(request: Request) {
   const profile = getProfile(user.id);
   const summary = progressSummary(user.id, new Date().toISOString().slice(0, 10));
   const progress: Record<string, { check: boolean; bench: boolean; case: boolean }> = {};
+  const ops: Record<string, { check: boolean; lab: boolean; case: boolean }> = {};
+  for (const id of opsIds) ops[id] = { check: false, lab: false, case: false };
   for (const row of summary.rows) {
+    if ((opsIds as readonly string[]).includes(row.itemId) && row.score === 1) {
+      if (row.kind === "check") ops[row.itemId].check = true;
+      if (row.kind === "lab") ops[row.itemId].lab = true;
+      if (row.kind === "ops-case") ops[row.itemId].case = true;
+    }
     if (row.kind !== "check" && row.kind !== "bench" && row.kind !== "case") continue;
     progress[row.itemId] ??= { check: false, bench: false, case: false };
     if (row.score === 1) progress[row.itemId][row.kind] = true;
@@ -35,6 +43,8 @@ export async function GET(request: Request) {
     marks: summary.marks,
     progress,
     brief: summary.rows.some((row) => row.kind === "brief" && row.score === 1),
+    ops,
+    opsBrief: summary.rows.some((row) => row.kind === "ops-brief" && row.score === 1),
     likes,
   });
 }

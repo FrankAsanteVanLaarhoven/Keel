@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { sections } from "@/lib/course/meta";
 import { getPack } from "@/lib/course";
+import { opsSections } from "@/lib/ops/meta";
+import { getOps } from "@/lib/ops";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { lessonFigures } from "@/lib/course/figures";
@@ -22,6 +24,8 @@ export default async function HomePage() {
   const locale = await resolveLocale();
   const m = t(locale);
   const pack = getPack(locale);
+  const ops = getOps(locale);
+  const levelName = { ease: m.levelEase, practice: m.levelPractice, operator: m.levelOperator, expert: m.levelExpert };
   return (
     <div className="mx-auto max-w-6xl px-5 pb-28 pt-12 md:pt-20">
       <p className="kicker">{m.kicker}</p>
@@ -33,6 +37,7 @@ export default async function HomePage() {
       <div className="mt-8 flex flex-wrap gap-3">
         <ContinueLink m={m} />
         <Link className="border border-line px-4 py-2 text-sm" href="/course">{m.seeCases}</Link>
+        <Link className="border border-line px-4 py-2 text-sm" href="/ops">{m.openOps}</Link>
       </div>
       <section className="mt-16 grid gap-10 border-t border-line pt-10 md:grid-cols-2">
         <div>
@@ -76,6 +81,29 @@ export default async function HomePage() {
             <Link className="flex items-baseline justify-between gap-6 py-4" href="/brief">
               <span><span className="num me-3 text-soft">12</span>{pack.brief.title}</span>
               <span className="text-sm text-soft">{m.harborFile}</span>
+            </Link>
+          </li>
+        </ol>
+      </section>
+      <section className="mt-16">
+        <p className="kicker">{m.opsKicker}</p>
+        <h2 className="mt-3 text-3xl font-medium tracking-tight">{m.opsTitle}</h2>
+        <p className="mt-4 max-w-2xl leading-8">{m.opsDeck}</p>
+        <ol className="mt-4 divide-y divide-line border-y border-line">
+          {opsSections.map((section) => (
+            <li key={section.id}>
+              <Link className="flex items-baseline justify-between gap-6 py-4" href={`/ops/${section.id}`}>
+                <span>
+                  <span className="num me-3 text-soft">{section.no}</span>
+                  {ops.sections[section.id].title}
+                </span>
+                <span className="text-sm text-soft">{levelName[section.level]}</span>
+              </Link>
+            </li>
+          ))}
+          <li>
+            <Link className="flex items-baseline justify-between gap-6 py-4" href="/ops/brief">
+              <span><span className="num me-3 text-soft">05</span>{ops.brief.title}</span>
             </Link>
           </li>
         </ol>

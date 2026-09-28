@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { sections } from "@/lib/course/meta";
 import { getPack } from "@/lib/course";
+import { getOps } from "@/lib/ops";
+import { opsById } from "@/lib/ops/meta";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
@@ -22,8 +24,9 @@ export default async function DossierPage() {
   const locale = await resolveLocale();
   const m = t(locale);
   const pack = getPack(locale);
+  const ops = getOps(locale);
   const user = await currentUser();
-  const rows = user ? listProgress(user.id).filter((row) => row.kind === "case" || row.kind === "brief") : [];
+  const rows = user ? listProgress(user.id).filter((row) => row.kind === "case" || row.kind === "brief" || row.kind === "ops-case" || row.kind === "ops-brief") : [];
   return (
     <div className="mx-auto max-w-3xl px-5 pb-28 pt-12">
       <p className="kicker">{m.dossier}</p>
@@ -34,8 +37,23 @@ export default async function DossierPage() {
       <div className="mt-8 space-y-8">
         {rows.map((row) => {
           const detail = parseDetail(row.detail);
-          const title = row.kind === "brief" ? pack.brief.title : pack.sections[row.itemId as keyof typeof pack.sections]?.title ?? row.itemId;
-          const file = row.kind === "brief" ? m.harborFile : sections.find((section) => section.id === row.itemId) ? pack.sections[row.itemId as keyof typeof pack.sections].caseFile : "";
+          const opsSection = opsById(row.itemId);
+          const title = row.kind === "brief"
+            ? pack.brief.title
+            : row.kind === "ops-brief"
+              ? ops.brief.title
+              : opsSection
+                ? ops.sections[opsSection.id].title
+                : pack.sections[row.itemId as keyof typeof pack.sections]?.title ?? row.itemId;
+          const file = row.kind === "brief"
+            ? m.harborFile
+            : row.kind === "ops-brief"
+              ? "NL-05"
+              : opsSection
+                ? ops.sections[opsSection.id].caseFile
+                : sections.find((section) => section.id === row.itemId)
+                  ? pack.sections[row.itemId as keyof typeof pack.sections].caseFile
+                  : "";
           return (
             <article key={`${row.kind}-${row.itemId}`} className="border-t border-line pt-6">
               <p className="kicker">{file} · {row.score === 1 ? m.acceptedLabel : m.draftLabel}</p>

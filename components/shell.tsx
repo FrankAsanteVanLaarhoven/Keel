@@ -86,6 +86,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
   const links = [
     ["/", m.programme],
     ["/course", m.cases],
+    ["/ops", m.opsNav],
     ["/foundry", m.foundry],
     ["/analytics", m.analytics],
     ["/standing", m.standing],
@@ -106,7 +107,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
           </Link>
           <nav className="hidden items-center gap-4 md:flex" aria-label={m.menu}>
             {links.map(([href, label]) => (
-              <Link key={href} href={href} className={pathname === href ? "border-b border-copper text-sm" : "text-sm text-soft"}>
+              <Link key={href} href={href} className={navCurrent(pathname, href) ? "border-b border-copper text-sm" : "text-sm text-soft"}>
                 {label}
               </Link>
             ))}
@@ -154,7 +155,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
         </div>
         <nav className="flex gap-4 overflow-x-auto px-4 pb-3 md:hidden" aria-label={m.menu}>
           {links.map(([href, label]) => (
-            <Link key={href} href={href} className={pathname === href ? "border-b border-copper text-sm whitespace-nowrap" : "text-sm whitespace-nowrap text-soft"}>
+            <Link key={href} href={href} className={navCurrent(pathname, href) ? "border-b border-copper text-sm whitespace-nowrap" : "text-sm whitespace-nowrap text-soft"}>
               {label}
             </Link>
           ))}
@@ -195,6 +196,11 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
       <span className="sr-only">{htmlLang(locale)} {dirFor(locale)}</span>
     </>
   );
+}
+
+function navCurrent(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function subscribeConsent(listener: () => void) {

@@ -18,6 +18,8 @@ export type Me = {
   marks?: string[];
   progress?: Record<string, { check: boolean; bench: boolean; case: boolean }>;
   brief?: boolean;
+  ops?: Record<string, { check: boolean; lab: boolean; case: boolean }>;
+  opsBrief?: boolean;
   likes: Record<string, { count: number; mine: boolean }>;
 };
 

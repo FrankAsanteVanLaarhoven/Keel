@@ -3,8 +3,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { briefDecisions, sections } from "../lib/course/meta";
 import { en } from "../lib/course/en";
+import { locales } from "../lib/locale";
+import { getOps } from "../lib/ops";
+import { opsBriefDecisions, opsSections } from "../lib/ops/meta";
+import { opsGateOpen } from "../lib/ops/gates";
+import { previewFlags } from "../lib/ops/preview";
 import { benchAnswers, briefAnswers, checkAnswers, decisionAnswers } from "../lib/server/answers";
 import { gradeAttempt } from "../lib/server/grade";
+import { gradeOps } from "../lib/server/ops-grade";
+import { opsBriefAnswers, opsCheckAnswers, opsDecisionAnswers, opsLabAnswers } from "../lib/server/ops-answers";
 import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
 import { matchAccept } from "../lib/locale";
@@ -48,6 +55,106 @@ describe("grade", () => {
     });
     expect(result.correct).toBe(true);
     expect(result.xp).toBe(200);
+  });
+});
+
+describe("operations programme", () => {
+  const note = "The desk should see Northline payments open, the key stays off the page, and the unread model spend stops this month.";
+
+  it("accepts the status lab and rejects a leaked key", () => {
+    const yes = gradeOps({
+      kind: "lab",
+      sectionId: "web",
+      payload: { fields: opsLabAnswers.web },
+      locale: "en",
+      hint: "x",
+      open: true,
+    });
+    const leaked = gradeOps({
+      kind: "lab",
+      sectionId: "web",
+      payload: { fields: { ...opsLabAnswers.web, body: "secret" } },
+      locale: "en",
+      hint: "x",
+      open: true,
+    });
+    expect(yes.correct).toBe(true);
+    expect(yes.xp).toBe(80);
+    expect(leaked.correct).toBe(false);
+    expect(previewFlags("web", { body: "secret" }).warn).toBe(true);
+  });
+
+  it("rejects a commit that includes the env file", () => {
+    const bad = gradeOps({
+      kind: "lab",
+      sectionId: "git",
+      payload: { fields: { ...opsLabAnswers.git, files: ["readme", "source", "env"] } },
+      locale: "en",
+      hint: "x",
+      open: true,
+    });
+    expect(bad.correct).toBe(false);
+    expect(previewFlags("git", { files: ["env"], branch: "feature" }).warn).toBe(true);
+    expect(gradeOps({ kind: "lab", sectionId: "devops", payload: { fields: opsLabAnswers.devops }, locale: "en", hint: "x", open: true }).correct).toBe(true);
+    expect(gradeOps({ kind: "lab", sectionId: "finops", payload: { fields: opsLabAnswers.finops }, locale: "en", hint: "x", open: true }).correct).toBe(true);
+  });
+
+  it("locks a lab until the check is recorded for a signed-in learner", () => {
+    expect(opsGateOpen({ kind: "lab", sectionId: "web", signedIn: true, rows: [] })).toBe(false);
+    expect(opsGateOpen({ kind: "lab", sectionId: "web", signedIn: false, rows: [] })).toBe(true);
+    const locked = gradeOps({ kind: "lab", sectionId: "web", payload: { fields: opsLabAnswers.web }, locale: "en", hint: "x", open: false });
+    expect(locked.locked).toBe(true);
+    expect(locked.correct).toBe(false);
+    expect(locked.explain).toEqual([]);
+  });
+
+  it("locks the release brief until four capstones are accepted", () => {
+    const rows = [
+      { itemId: "web", kind: "ops-case", score: 1 },
+      { itemId: "git", kind: "ops-case", score: 1 },
+      { itemId: "devops", kind: "ops-case", score: 1 },
+    ];
+    expect(opsGateOpen({ kind: "ops-brief", signedIn: true, rows })).toBe(false);
+    rows.push({ itemId: "finops", kind: "ops-case", score: 1 });
+    expect(opsGateOpen({ kind: "ops-brief", signedIn: true, rows })).toBe(true);
+    const accepted = gradeOps({
+      kind: "ops-brief",
+      payload: { choices: opsBriefAnswers, note },
+      locale: "en",
+      hint: "different",
+      open: true,
+    });
+    expect(accepted.correct).toBe(true);
+    expect(accepted.xp).toBe(200);
+  });
+
+  it("keeps every published operations choice inside its list", () => {
+    for (const locale of locales) {
+      const pack = getOps(locale);
+      for (const section of opsSections) {
+        const copy = pack.sections[section.id];
+        expect(section.checkIds).toContain(opsCheckAnswers[section.id]);
+        expect(copy.checkOptions).toHaveLength(4);
+        expect(copy.decisions).toHaveLength(3);
+        expect(copy.caseSteps).toHaveLength(4);
+        for (const field of section.lab) {
+          expect(copy.fields[field.id]?.options).toHaveLength(field.optionIds.length);
+          const answer = opsLabAnswers[section.id][field.id];
+          if (typeof answer === "string") expect(field.optionIds).toContain(answer);
+          else for (const id of answer ?? []) expect(field.optionIds).toContain(id);
+          if (field.kind === "order") {
+            expect(field.start).toHaveLength(field.optionIds.length);
+            expect(field.start).not.toEqual(field.optionIds);
+          }
+        }
+        for (const decision of section.decisions) {
+          expect(decision.optionIds).toContain(opsDecisionAnswers[section.id][decision.id]);
+        }
+      }
+      expect(pack.brief.decisions).toHaveLength(opsBriefDecisions.length);
+      expect(pack.brief.steps).toHaveLength(4);
+    }
+    for (const decision of opsBriefDecisions) expect(decision.optionIds).toContain(opsBriefAnswers[decision.id]);
   });
 });
 

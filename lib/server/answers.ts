@@ -56,4 +56,4 @@ export const briefAnswers: Record<string, string> = {
   futures: "leave",
 };
 
-export const xpFor = { check: 40, bench: 60, case: 120, brief: 200 } as const;
+export const xpFor = { check: 40, bench: 60, lab: 80, case: 120, brief: 200 } as const;

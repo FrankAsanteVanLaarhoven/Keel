@@ -7,7 +7,7 @@ import { useKeel } from "./keel-context";
 type Option = { id: string; text: string };
 type Decision = { id: string; prompt: string; options: Option[] };
 
-async function postGrade(body: unknown): Promise<{ correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string }> {
+export async function postGrade(body: unknown): Promise<{ correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string }> {
   try {
     const response = await fetch("/api/grade", {
       method: "POST",
@@ -28,12 +28,14 @@ export function CheckForm({
   prompt,
   options,
   m,
+  onDone,
 }: {
   kind: "check";
   sectionId: string;
   prompt: string;
   options: Option[];
   m: Messages;
+  onDone?: (result: { correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string }) => void;
 }) {
   const [choice, setChoice] = useState("");
   const [result, setResult] = useState<{ correct?: boolean; why?: string[]; error?: string; saved?: boolean } | null>(null);
@@ -44,7 +46,9 @@ export function CheckForm({
       onSubmit={async (event) => {
         event.preventDefault();
         setPending(true);
-        setResult(await postGrade({ kind, sectionId, choice }));
+        const next = await postGrade({ kind, sectionId, choice });
+        setResult(next);
+        onDone?.(next);
         setPending(false);
       }}
     >
@@ -61,7 +65,7 @@ export function CheckForm({
         </div>
       </fieldset>
       <Submit m={m} pending={pending} disabled={!choice} />
-      <Result m={m} result={result} />
+      <Result m={m} result={result} lockedText={m.stepLocked} />
     </form>
   );
 }
@@ -205,6 +209,9 @@ export function CaseForm({
   m,
   brief = false,
   locked = false,
+  gradeKind,
+  lockedText,
+  onDone,
 }: {
   sectionId?: string;
   decisions: Decision[];
@@ -213,6 +220,9 @@ export function CaseForm({
   m: Messages;
   brief?: boolean;
   locked?: boolean;
+  gradeKind?: "case" | "brief" | "ops-case" | "ops-brief";
+  lockedText?: string;
+  onDone?: (result: { correct?: boolean; why?: string[]; saved?: boolean; locked?: boolean; error?: string }) => void;
 }) {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
@@ -225,7 +235,9 @@ export function CaseForm({
         event.preventDefault();
         if (locked) return;
         setPending(true);
-        setResult(await postGrade({ kind: brief ? "brief" : "case", sectionId, choices, note }));
+        const next = await postGrade({ kind: gradeKind ?? (brief ? "brief" : "case"), sectionId, choices, note });
+        setResult(next);
+        onDone?.(next);
         setPending(false);
       }}
     >
@@ -254,7 +266,7 @@ export function CaseForm({
         />
       </label>
       <Submit m={m} pending={pending} disabled={locked} />
-      <Result m={m} result={result} />
+      <Result m={m} result={result} lockedText={lockedText} />
     </form>
   );
 }
@@ -280,20 +292,28 @@ function Submit({ m, pending, disabled = false }: { m: Messages; pending: boolea
   );
 }
 
-function Result({ m, result }: { m: Messages; result: { correct?: boolean; why?: string[]; error?: string; locked?: boolean; saved?: boolean } | null }) {
+function Result({
+  m,
+  result,
+  lockedText,
+}: {
+  m: Messages;
+  result: { correct?: boolean; why?: string[]; error?: string; locked?: boolean; saved?: boolean } | null;
+  lockedText?: string;
+}) {
   if (!result) return null;
   const tone =
     result.error === "rate"
       ? m.rateLimited
       : result.error === "network"
-      ? "Connection error. Could not reach the server — check your connection and try again."
-      : result.error === "server"
-      ? "The server was unable to record this answer. Please try again."
-      : result.locked
-      ? m.briefLocked
-      : result.correct
-      ? m.correct
-      : m.notYet;
+        ? "Connection error. Could not reach the server — check your connection and try again."
+        : result.error === "server"
+          ? "The server was unable to record this answer. Please try again."
+          : result.locked
+            ? (lockedText ?? m.briefLocked)
+            : result.correct
+              ? m.correct
+              : m.notYet;
   return (
     <div className="mt-6 border-s-2 border-copper ps-4" role="status">
       <p>{tone}</p>

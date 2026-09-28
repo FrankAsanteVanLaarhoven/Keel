@@ -11,6 +11,10 @@ export function marksOf(rows: ProgressRow[]): string[] {
   if (cases >= 11) marks.push("all");
   if (done("brief")) marks.push("brief");
   if (done("foundry")) marks.push("foundry");
+  if (done("lab")) marks.push("lab");
+  const opsCases = rows.filter((row) => row.kind === "ops-case" && row.score === 1).length;
+  if (opsCases >= 4) marks.push("ops");
+  if (done("ops-brief")) marks.push("opsBrief");
   return marks;
 }
 
