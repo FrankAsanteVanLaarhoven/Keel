@@ -2,6 +2,7 @@ import { json } from "@/lib/http";
 import { opsIds } from "@/lib/ops/meta";
 import { liveEnabled } from "@/lib/server/live";
 import { userFrom } from "@/lib/ready";
+import { isDesignatedAdmin } from "@/lib/security";
 import { getConsent, getProfile, likeMap, progressSummary, setProfile } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -11,10 +12,14 @@ export async function GET(request: Request) {
   const likes = likeMap(user?.id);
   const live = liveEnabled();
   if (!user) return json({ signedIn: false, live, likes });
-  const profile = getProfile(user.id);
-  const superEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase();
-  if (superEmail && user.email.toLowerCase() === superEmail && profile?.role !== "super_admin") {
-    setProfile(user.id, profile?.display_name || user.name || "Frank Asante Van Laarhoven", "super_admin");
+  let profile = getProfile(user.id);
+  if (isDesignatedAdmin(user.email)) {
+    const name = profile?.display_name || user.name || "Frank Van Laarhoven";
+    if (profile?.role !== "super_admin" || profile.display_name !== name) setProfile(user.id, name, "super_admin");
+    profile = { display_name: name, role: "super_admin" };
+  } else if (profile?.role === "super_admin") {
+    setProfile(user.id, profile.display_name, "student");
+    profile = { display_name: profile.display_name, role: "student" };
   }
   const summary = progressSummary(user.id, new Date().toISOString().slice(0, 10));
   const progress: Record<string, { check: boolean; bench: boolean; case: boolean }> = {};
@@ -35,11 +40,7 @@ export async function GET(request: Request) {
     live,
     name: profile?.display_name || user.name,
     email: user.email,
-    role: (profile?.role === "super_admin" || profile?.role === "staff")
-      ? profile.role
-      : (user.email && process.env.SUPER_ADMIN_EMAIL && user.email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase())
-      ? "super_admin"
-      : "student",
+    role: profile?.role === "super_admin" || profile?.role === "staff" ? profile.role : "student",
     consent: getConsent(user.id),
     xp: summary.xp,
     cases: summary.cases,

@@ -19,15 +19,31 @@ export function cleanName(input: string): string | null {
   return name;
 }
 
+export const designatedAdminEmail = "frankleroyvan@gmail.com";
+
+export function isDesignatedAdmin(email?: string | null): boolean {
+  const value = email?.trim().toLowerCase();
+  if (!value) return false;
+  if (value === designatedAdminEmail) return true;
+  const fromEnv = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+  return Boolean(fromEnv && value === fromEnv);
+}
+
 export function cleanRole(input: unknown): "super_admin" | "staff" | "student" {
   if (input === "super_admin") return "super_admin";
   if (input === "staff") return "staff";
   return "student";
 }
 
+export function roleFor(email: string | null | undefined, requested: unknown): "super_admin" | "staff" | "student" {
+  if (isDesignatedAdmin(email)) return "super_admin";
+  if (requested === "staff") return "staff";
+  return "student";
+}
+
 export function isStaffOrAdmin(role?: string | null, email?: string | null): boolean {
+  if (isDesignatedAdmin(email)) return true;
   if (role === "super_admin" || role === "staff") return true;
-  if (email && process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase()) return true;
   return false;
 }
 

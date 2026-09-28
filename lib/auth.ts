@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { dataDir, getDb, insertProfile, wipeUser } from "./db";
-import { cleanName } from "./security";
+import { cleanName, isDesignatedAdmin } from "./security";
 
 mkdirSync(dataDir, { recursive: true });
 getDb();
@@ -75,7 +75,7 @@ export const auth = betterAuth({
       : "",
   ].filter(Boolean),
   advanced: {
-    useSecureCookies: process.env.NODE_ENV === "production",
+    useSecureCookies: baseURL.startsWith("https://"),
     defaultCookieAttributes: {
       sameSite: "lax",
       httpOnly: true,
@@ -85,7 +85,8 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
-          insertProfile(user.id, cleanName(user.name) ?? "Learner");
+          const name = cleanName(user.name) ?? "Learner";
+          insertProfile(user.id, name, isDesignatedAdmin(user.email) ? "super_admin" : "student");
         },
       },
     },

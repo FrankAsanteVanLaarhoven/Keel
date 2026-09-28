@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { guard, json } from "@/lib/http";
 import { userFrom } from "@/lib/ready";
-import { cleanName, cleanRole } from "@/lib/security";
+import { cleanName, roleFor } from "@/lib/security";
 import { setProfile } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const body = gated.body as { displayName?: string; role?: unknown };
   const name = cleanName(body.displayName ?? "");
   if (!name) return json({ error: "name" }, 400);
-  const role = cleanRole(body.role);
+  const role = roleFor(user.email, body.role);
   setProfile(user.id, name, role);
   await auth.api.updateUser({ body: { name }, headers: request.headers });
   return json({ ok: true });

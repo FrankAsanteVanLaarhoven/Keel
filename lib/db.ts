@@ -117,14 +117,14 @@ export function getDb(): DatabaseSync {
   return db;
 }
 
-export function insertProfile(userId: string, displayName: string) {
+export function insertProfile(userId: string, displayName: string, role: "super_admin" | "staff" | "student" = "student") {
   getDb()
     .prepare(
       `INSERT INTO keel_profile (user_id, display_name, role, created_at)
-       VALUES (?, ?, 'student', ?)
-       ON CONFLICT(user_id) DO NOTHING`,
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET role = excluded.role`,
     )
-    .run(userId, displayName || "Learner", Date.now());
+    .run(userId, displayName || "Learner", role, Date.now());
 }
 
 export function wipeUser(userId: string) {

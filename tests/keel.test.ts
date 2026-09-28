@@ -16,7 +16,7 @@ import { opsBriefAnswers, opsCheckAnswers, opsDecisionAnswers, opsLabAnswers } f
 import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
 import { matchAccept } from "../lib/locale";
-import { cacheControlFor, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, sameOrigin, utcWeekStart } from "../lib/security";
+import { cacheControlFor, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
 import { saveProgress, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import { localReply } from "../lib/tutor";
@@ -398,6 +398,8 @@ describe("super admin & teacher evaluation ledger", () => {
     expect(isStaffOrAdmin("student", "principal@keel.edu")).toBe(true);
     expect(isStaffOrAdmin("student", "other@keel.edu")).toBe(false);
     delete process.env.SUPER_ADMIN_EMAIL;
+    expect(roleFor("frankleroyvan@gmail.com", "student")).toBe("super_admin");
+    expect(roleFor("other@keel.edu", "super_admin")).toBe("student");
   });
 
   it("records submissions and allows teacher evaluation overrides", () => {

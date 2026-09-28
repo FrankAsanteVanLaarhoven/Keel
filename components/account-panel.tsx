@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import type { Messages } from "@/lib/i18n/en";
+import { designatedAdminEmail } from "@/lib/security";
 import { useKeel } from "./keel-context";
 
 export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
@@ -12,6 +13,7 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<"student" | "staff" | "super_admin">("student");
+  const designated = email.trim().toLowerCase() === designatedAdminEmail;
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -40,7 +42,7 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
             await fetch("/api/profile", {
               method: "POST",
               headers: { "content-type": "application/json", "x-keel": "1" },
-              body: JSON.stringify({ displayName: name, role }),
+              body: JSON.stringify({ displayName: name, role: designated ? "super_admin" : role }),
             });
           }
           router.push("/course");
@@ -61,10 +63,15 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
         </Field>
         {mode === "up" ? (
           <Field label={m.staffOrStudent}>
-            <select className="mt-1 w-full border border-line bg-raised px-3 py-2" value={role} onChange={(event) => setRole(event.target.value as "student" | "staff" | "super_admin")}>
+            <select
+              className="mt-1 w-full border border-line bg-raised px-3 py-2"
+              value={designated ? "super_admin" : role === "super_admin" ? "student" : role}
+              onChange={(event) => setRole(event.target.value as "student" | "staff")}
+              disabled={designated}
+            >
+              {designated ? <option value="super_admin">Super Admin</option> : null}
               <option value="student">{m.roleStudent}</option>
               <option value="staff">{m.roleStaff}</option>
-              <option value="super_admin">Super Admin</option>
             </select>
           </Field>
         ) : null}
@@ -137,10 +144,15 @@ function AccountForm({ m, me, refresh }: { m: Messages; me: NonNullable<ReturnTy
           <input className="mt-1 w-full border border-line bg-raised px-3 py-2" value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
         <Field label={m.role}>
-          <select className="mt-1 w-full border border-line bg-raised px-3 py-2" value={role} onChange={(event) => setRole(event.target.value as "student" | "staff" | "super_admin")}>
+          <select
+            className="mt-1 w-full border border-line bg-raised px-3 py-2"
+            value={me.email?.toLowerCase() === designatedAdminEmail ? "super_admin" : role === "super_admin" ? "staff" : role}
+            onChange={(event) => setRole(event.target.value as "student" | "staff")}
+            disabled={me.email?.toLowerCase() === designatedAdminEmail}
+          >
+            {me.email?.toLowerCase() === designatedAdminEmail ? <option value="super_admin">Super Admin</option> : null}
             <option value="student">{m.roleStudent}</option>
             <option value="staff">{m.roleStaff}</option>
-            <option value="super_admin">Super Admin (Master Answers & Evaluation)</option>
           </select>
         </Field>
         <button className="border border-ink px-4 py-2 text-sm" type="submit">{m.save}</button>
