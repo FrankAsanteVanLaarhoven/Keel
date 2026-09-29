@@ -14,5 +14,5 @@ export async function POST(request: Request) {
   const sectionId = (gated.body as { sectionId?: string }).sectionId ?? "";
   const allowed = (sectionIds as readonly string[]).includes(sectionId) || (opsIds as readonly string[]).includes(sectionId);
   if (!allowed) return json({ error: "section" }, 404);
-  return json(toggleLike(user.id, sectionId));
+  return json(await toggleLike(user.id, sectionId));
 }

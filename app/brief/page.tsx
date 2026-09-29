@@ -27,7 +27,7 @@ export default async function BriefPage() {
   const m = t(locale);
   const brief = getPack(locale).brief;
   const user = await currentUser();
-  const cases = user ? progressSummary(user.id, new Date().toISOString().slice(0, 10)).cases : 0;
+  const cases = user ? (await progressSummary(user.id, new Date().toISOString().slice(0, 10))).cases : 0;
   const locked = cases < 11;
   const decisions = briefDecisions.map((decision, index) => ({
     id: decision.id,

@@ -19,6 +19,7 @@ import { gradeOps } from "../lib/server/ops-grade";
 import { opsBriefAnswers, opsCheckAnswers, opsDecisionAnswers, opsLabAnswers } from "../lib/server/ops-answers";
 import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
+import { bindPlaceholders } from "../lib/sql";
 import { matchAccept } from "../lib/locale";
 import { cacheControlFor, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
@@ -378,12 +379,25 @@ describe("voice events", () => {
   });
 });
 
+describe("records", () => {
+  it("numbers postgres placeholders and leaves sqlite markers", () => {
+    expect(bindPlaceholders("SELECT ? WHERE ? IS NULL", true)).toBe("SELECT $1 WHERE $2 IS NULL");
+    expect(bindPlaceholders("SELECT ?", false)).toBe("SELECT ?");
+  });
+});
+
 describe("rate limit", () => {
-  it("blocks the sixth call in a window", () => {
+  it("blocks the sixth call in a window", async () => {
     const db = new DatabaseSync(":memory:");
     db.exec("CREATE TABLE keel_rate (bucket TEXT NOT NULL, window_start INTEGER NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (bucket, window_start))");
-    for (let i = 0; i < 5; i += 1) expect(takeToken(db, "user:1:grade", 5, 1000, 10_000).ok).toBe(true);
-    expect(takeToken(db, "user:1:grade", 5, 1000, 10_500).ok).toBe(false);
+    const store = {
+      get: <T>(statement: string, params: unknown[]) => db.prepare(statement).get(...(params as never[])) as T | undefined,
+      run: (statement: string, params: unknown[]) => {
+        db.prepare(statement).run(...(params as never[]));
+      },
+    };
+    for (let i = 0; i < 5; i += 1) expect((await takeToken("user:1:grade", 5, 1000, 10_000, store)).ok).toBe(true);
+    expect((await takeToken("user:1:grade", 5, 1000, 10_500, store)).ok).toBe(false);
   });
 });
 
@@ -479,10 +493,10 @@ describe("super admin & teacher evaluation ledger", () => {
     expect(roleFor("other@keel.edu", "super_admin")).toBe("student");
   });
 
-  it("records submissions and allows teacher evaluation overrides", () => {
-    wipeUser("student-42");
-    insertProfile("student-42", "Ada Lovelace");
-    saveProgress({
+  it("records submissions and allows teacher evaluation overrides", async () => {
+    await wipeUser("student-42");
+    await insertProfile("student-42", "Ada Lovelace");
+    await saveProgress({
       userId: "student-42",
       itemId: "harbor",
       kind: "brief",
@@ -492,7 +506,7 @@ describe("super admin & teacher evaluation ledger", () => {
       day: "2026-09-28",
     });
 
-    const submissions = getCohortSubmissions("brief");
+    const submissions = await getCohortSubmissions("brief");
     const sub = submissions.find((s) => s.userId === "student-42" && s.itemId === "harbor");
     expect(sub).toBeDefined();
     expect(sub?.displayName).toBe("Ada Lovelace");
@@ -500,7 +514,7 @@ describe("super admin & teacher evaluation ledger", () => {
     expect(sub?.verified).toBe(0);
 
     // Teacher cross-checks and manually overrides grade with constructive feedback
-    updateTeacherEvaluation({
+    await updateTeacherEvaluation({
       userId: "student-42",
       itemId: "harbor",
       kind: "brief",
@@ -510,7 +524,7 @@ describe("super admin & teacher evaluation ledger", () => {
       verified: 1,
     });
 
-    const updated = getCohortSubmissions("brief").find((s) => s.userId === "student-42" && s.itemId === "harbor");
+    const updated = (await getCohortSubmissions("brief")).find((s) => s.userId === "student-42" && s.itemId === "harbor");
     expect(updated?.score).toBe(1);
     expect(updated?.xp).toBe(200);
     expect(updated?.verified).toBe(1);

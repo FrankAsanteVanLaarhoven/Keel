@@ -158,6 +158,7 @@ export const de: Messages = {
   dataLikes: "Eine Nützlich-Marke speichert Ihr Konto und den Abschnitt. Die Tafel zeigt nur die Zahl.",
   dataBoard: "Der Stand zeigt den Namen, den Sie gewählt haben, Ihre Punkte und wie viele Fälle Sie angenommen haben. Er zeigt nicht Ihre E-Mail.",
   dataCases: "Fallnotizen sehen nur Sie, im Dossier und in einem Export, den Sie anfordern.",
+  dataStore: "Auf einem Rechner, den Sie selbst starten, bleiben Konten und Fortschritt in SQLite auf diesem Rechner. In der öffentlichen Klasse bleiben sie in PostgreSQL, ein Neustart löscht sie nicht. Bewertungstext wird nach der Prüfung weiter verworfen. Dateien, die eine Lehrperson für die Klasse hochlädt, bleiben zum Herunterladen erhalten.",
   dataFiles: "Eine Datei für eine Woche wird auf diesem Server gelesen und dann verworfen. Keel behält einen Hash und die Marken: ob sie als Bewertung lesbar ist, wie viel Wochensprache sie nutzt, und ob sie einer anderen Abgabe oder dem Auftrag entspricht. Die Wörter werden nicht behalten. Passphrasen werden gehasht. Die Anmeldung ist begrenzt. Die Bewertungsprüfung nicht.",
   dataDelete: "Sie können Ihre Daten laden oder das Konto löschen. Das Löschen entfernt Profil, Fälle, Marken und Sitzung.",
   fictional: "Erfundener Fall. Kein laufendes System.",

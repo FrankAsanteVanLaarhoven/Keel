@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           ? pack.brief.narration
           : messages.programmeNarration;
   const expert = ops ? opsPack.sections[ops.id].expert.join(" ") : opsBrief ? opsPack.brief.task : section ? pack.sections[section.id].expert.join(" ") : messages.about3;
-  if (!getConsent(user.id) || !liveEnabled()) {
+  if (!(await getConsent(user.id)) || !liveEnabled()) {
     return json({
       text: localReply({
         locale,

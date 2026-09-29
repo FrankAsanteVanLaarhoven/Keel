@@ -21,8 +21,8 @@ export default async function StandingPage() {
   const m = t(locale);
   const user = await currentUser();
   const today = new Date().toISOString().slice(0, 10);
-  const summary = user ? progressSummary(user.id, today) : null;
-  const board = topCorrect(attemptTotals()).map((row, index) => ({
+  const summary = user ? await progressSummary(user.id, today) : null;
+  const board = topCorrect(await attemptTotals()).map((row, index) => ({
     rank: index + 1,
     name: row.name,
     xp: row.correct,

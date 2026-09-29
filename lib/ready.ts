@@ -1,13 +1,13 @@
 import { headers } from "next/headers";
 import { auth } from "./auth";
-import { getDb } from "./db";
+import { ensureRecords } from "./db";
 
 let pending: Promise<void> | null = null;
 
 export function ensureReady(): Promise<void> {
   if (!pending) {
     pending = (async () => {
-      getDb();
+      await ensureRecords();
       const ctx = await auth.$context;
       if (typeof ctx.runMigrations === "function") await ctx.runMigrations();
     })().catch((error: unknown) => {

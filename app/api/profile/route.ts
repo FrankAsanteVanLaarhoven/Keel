@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const name = cleanName(body.displayName ?? "");
   if (!name) return json({ error: "name" }, 400);
   const role = roleFor(user.email, body.role);
-  setProfile(user.id, name, role);
+  await setProfile(user.id, name, role);
   await auth.api.updateUser({ body: { name }, headers: request.headers });
   return json({ ok: true });
 }

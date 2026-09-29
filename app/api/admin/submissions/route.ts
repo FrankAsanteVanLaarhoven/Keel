@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     return json({ error: "auth" }, 401);
   }
 
-  const profile = getProfile(user.id);
+  const profile = await getProfile(user.id);
   const allowed = isStaffOrAdmin(profile?.role, user.email);
 
   if (!allowed) {
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const kind = url.searchParams.get("kind") || undefined;
 
-  const submissions = getCohortSubmissions(kind);
+  const submissions = await getCohortSubmissions(kind);
 
   // Calculate cohort evaluation metrics
   const totalSubmissions = submissions.length;

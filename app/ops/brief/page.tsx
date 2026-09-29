@@ -22,7 +22,7 @@ export default async function OpsBriefPage() {
   const m = t(locale);
   const brief = getOps(locale).brief;
   const user = await currentUser();
-  const accepted = user ? opsCasesAccepted(listProgress(user.id)) : 0;
+  const accepted = user ? opsCasesAccepted(await listProgress(user.id)) : 0;
   const locked = accepted < 4;
   const decisions = opsBriefDecisions.map((decision, index) => ({
     id: decision.id,

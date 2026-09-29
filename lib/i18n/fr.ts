@@ -158,6 +158,7 @@ export const fr: Messages = {
   dataLikes: "Une marque utile est gardée comme votre compte et la section. Le tableau ne montre que le nombre.",
   dataBoard: "Le classement montre le nom que vous avez choisi, vos points, et combien de cas vous avez acceptés. Il ne montre pas votre courriel.",
   dataCases: "Les notes de cas ne sont visibles que par vous, dans votre dossier et dans un export que vous demandez.",
+  dataStore: "Sur une machine que vous lancez, les comptes et la progression restent dans SQLite sur cette machine. Sur la classe publique, ils restent dans PostgreSQL, et un redémarrage ne les efface pas. Le texte d'une évaluation est toujours écarté après la lecture. Les fichiers de classe déposés par un enseignant restent disponibles au téléchargement.",
   dataFiles: "Un fichier déposé pour une semaine est lu sur ce serveur, puis écarté. Keel garde une empreinte et les marques : s'il se lit comme une évaluation, combien il reprend la langue de la semaine, et s'il correspond à un autre dépôt ou à la consigne. Les mots ne sont pas gardés. Les phrases secrètes sont condensées. La connexion est limitée. La vérification de l'évaluation ne l'est pas.",
   dataDelete: "Vous pouvez télécharger vos données ou supprimer le compte. La suppression retire le profil, les cas, les marques et la session.",
   fictional: "Cas fictif. Pas un système en service.",

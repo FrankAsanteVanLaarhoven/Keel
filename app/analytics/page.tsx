@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AnalyticsPage() {
   const locale = await resolveLocale();
   const m = t(locale);
-  const overview = getAnalyticsOverview();
+  const overview = await getAnalyticsOverview();
 
   return (
     <main id="content" className="pb-28">

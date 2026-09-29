@@ -1,5 +1,4 @@
 import { takeToken } from "./rate";
-import { getDb } from "./db";
 import { clientBucket, readJson, sameOrigin } from "./security";
 
 export function json(data: unknown, status = 200, headers?: Record<string, string>) {
@@ -25,7 +24,7 @@ export async function guard(request: Request, bucket: string, limit: number, win
       return { error: json({ error: "body" }, 400), body: null as unknown };
     }
   }
-  const rate = takeToken(getDb(), `${clientBucket(request, userId)}:${bucket}`, limit, windowMs);
+  const rate = await takeToken(`${clientBucket(request, userId)}:${bucket}`, limit, windowMs);
   if (!rate.ok) {
     return {
       error: json({ error: "rate" }, 429, { "retry-after": String(rate.retryAfter) }),

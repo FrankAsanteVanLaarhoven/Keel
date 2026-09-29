@@ -9,19 +9,19 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const user = await userFrom(request);
-  const likes = likeMap(user?.id);
+  const likes = await likeMap(user?.id);
   const live = liveEnabled();
   if (!user) return json({ signedIn: false, live, likes });
-  let profile = getProfile(user.id);
+  let profile = await getProfile(user.id);
   if (isDesignatedAdmin(user.email)) {
     const name = profile?.display_name || user.name || "Frank Van Laarhoven";
-    if (profile?.role !== "super_admin" || profile.display_name !== name) setProfile(user.id, name, "super_admin");
+    if (profile?.role !== "super_admin" || profile.display_name !== name) await setProfile(user.id, name, "super_admin");
     profile = { display_name: name, role: "super_admin" };
   } else if (profile?.role === "super_admin") {
-    setProfile(user.id, profile.display_name, "student");
+    await setProfile(user.id, profile.display_name, "student");
     profile = { display_name: profile.display_name, role: "student" };
   }
-  const summary = progressSummary(user.id, new Date().toISOString().slice(0, 10));
+  const summary = await progressSummary(user.id, new Date().toISOString().slice(0, 10));
   const progress: Record<string, { check: boolean; bench: boolean; case: boolean }> = {};
   const ops: Record<string, { check: boolean; lab: boolean; case: boolean }> = {};
   for (const id of opsIds) ops[id] = { check: false, lab: false, case: false };
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     name: profile?.display_name || user.name,
     email: user.email,
     role: profile?.role === "super_admin" || profile?.role === "staff" ? profile.role : "student",
-    consent: getConsent(user.id),
+    consent: await getConsent(user.id),
     xp: summary.xp,
     cases: summary.cases,
     streak: summary.streak,

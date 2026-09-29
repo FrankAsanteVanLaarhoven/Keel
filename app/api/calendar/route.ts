@@ -8,12 +8,12 @@ export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
   const now = Date.now();
   const events: CalendarEvent[] = [];
-  for (const work of listWork()) {
+  for (const work of await listWork()) {
     if (!workOpen(work, now).open && work.status !== "published") continue;
     const week = weeks.find((item) => item.id === work.id);
     const when = work.closesAt ?? work.opensAt ?? defaultDeadline(week?.no ?? 1, now);
     if (!week) continue;
-    const downloads = filesFor(work.id, "", true).filter((file) => file.scope === "class");
+    const downloads = (await filesFor(work.id, "", true)).filter((file) => file.scope === "class");
     events.push({
       uid: `keel-${work.id}-deadline@keel`,
       start: when,
@@ -23,11 +23,11 @@ export async function GET(request: Request) {
       url: `${origin}/term/${work.id}`,
     });
   }
-  for (const course of listCourses()) {
+  for (const course of await listCourses()) {
     if (!workOpen(course, now).open) continue;
     const when = course.closesAt ?? course.opensAt;
     if (!when) continue;
-    const downloads = filesFor(course.id, "", true).filter((file) => file.scope === "class");
+    const downloads = (await filesFor(course.id, "", true)).filter((file) => file.scope === "class");
     events.push({
       uid: `keel-${course.id}@keel`,
       start: course.opensAt ?? when,
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       url: `${origin}/term/course/${course.id}`,
     });
   }
-  for (const note of listAnnouncements()) {
+  for (const note of await listAnnouncements()) {
     if (note.status !== "published") continue;
     const when = note.publishAt ?? now;
     events.push({

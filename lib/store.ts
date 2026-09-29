@@ -1,16 +1,13 @@
-import { getDb } from "./db";
+import { sqlAll, sqlGet, sqlRun } from "./sql";
+import { ensureRecords } from "./db";
 import { casesAccepted, marksOf, streakOf, type ProgressRow } from "./progress";
 import { leaderboardSql } from "./security";
 
 export type StoredProgress = ProgressRow & { xp: number; detail: string | null; updatedAt: number };
 
-export function listProgress(userId: string): StoredProgress[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT item_id, kind, score, xp, detail, day, updated_at
-       FROM keel_progress WHERE user_id = ?`,
-    )
-    .all(userId) as {
+export async function listProgress(userId: string): Promise<StoredProgress[]> {
+  await ensureRecords();
+  const rows = await sqlAll<{
     item_id: string;
     kind: string;
     score: number;
@@ -18,7 +15,11 @@ export function listProgress(userId: string): StoredProgress[] {
     detail: string | null;
     day: string | null;
     updated_at: number;
-  }[];
+  }>(
+    `SELECT item_id, kind, score, xp, detail, day, updated_at
+     FROM keel_progress WHERE user_id = ?`,
+    [userId],
+  );
   return rows.map((row) => ({
     itemId: row.item_id,
     kind: row.kind,
@@ -30,7 +31,7 @@ export function listProgress(userId: string): StoredProgress[] {
   }));
 }
 
-export function saveProgress(input: {
+export async function saveProgress(input: {
   userId: string;
   itemId: string;
   kind: string;
@@ -39,17 +40,18 @@ export function saveProgress(input: {
   detail: string | null;
   day: string;
 }) {
-  const db = getDb();
-  const existing = db
-    .prepare(`SELECT score, xp, detail FROM keel_progress WHERE user_id = ? AND item_id = ? AND kind = ?`)
-    .get(input.userId, input.itemId, input.kind) as { score: number; xp: number; detail: string | null } | undefined;
+  await ensureRecords();
+  const existing = await sqlGet<{ score: number; xp: number; detail: string | null }>(
+    `SELECT score, xp, detail FROM keel_progress WHERE user_id = ? AND item_id = ? AND kind = ?`,
+    [input.userId, input.itemId, input.kind],
+  );
   if (existing?.score === 1 && !input.correct) {
     return { saved: true, xp: existing.xp, kept: true };
   }
   const score = input.correct ? 1 : 0;
   const xp = input.correct ? Math.max(existing?.xp ?? 0, input.xp) : (existing?.xp ?? 0);
   const detail = input.correct || !existing ? input.detail : existing.detail;
-  db.prepare(
+  await sqlRun(
     `INSERT INTO keel_progress (user_id, item_id, kind, score, xp, detail, day, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, item_id, kind) DO UPDATE SET
@@ -58,12 +60,13 @@ export function saveProgress(input: {
        detail = excluded.detail,
        day = excluded.day,
        updated_at = excluded.updated_at`,
-  ).run(input.userId, input.itemId, input.kind, score, xp, detail, input.day, Date.now());
+    [input.userId, input.itemId, input.kind, score, xp, detail, input.day, Date.now()],
+  );
   return { saved: true, xp, kept: false };
 }
 
-export function progressSummary(userId: string, today: string) {
-  const rows = listProgress(userId);
+export async function progressSummary(userId: string, today: string) {
+  const rows = await listProgress(userId);
   const xp = rows.reduce((sum, row) => sum + row.xp, 0);
   return {
     rows,
@@ -77,28 +80,21 @@ export function progressSummary(userId: string, today: string) {
   };
 }
 
-export function toggleLike(userId: string, sectionId: string): { mine: boolean; count: number } {
-  const db = getDb();
-  const existing = db.prepare(`SELECT 1 AS ok FROM keel_like WHERE user_id = ? AND section_id = ?`).get(userId, sectionId) as
-    | { ok: number }
-    | undefined;
-  if (existing) db.prepare(`DELETE FROM keel_like WHERE user_id = ? AND section_id = ?`).run(userId, sectionId);
-  else db.prepare(`INSERT INTO keel_like (user_id, section_id, created_at) VALUES (?, ?, ?)`).run(userId, sectionId, Date.now());
-  const count = (
-    db.prepare(`SELECT COUNT(*) AS count FROM keel_like WHERE section_id = ?`).get(sectionId) as { count: number }
-  ).count;
+export async function toggleLike(userId: string, sectionId: string): Promise<{ mine: boolean; count: number }> {
+  await ensureRecords();
+  const existing = await sqlGet<{ ok: number }>(`SELECT 1 AS ok FROM keel_like WHERE user_id = ? AND section_id = ?`, [userId, sectionId]);
+  if (existing) await sqlRun(`DELETE FROM keel_like WHERE user_id = ? AND section_id = ?`, [userId, sectionId]);
+  else await sqlRun(`INSERT INTO keel_like (user_id, section_id, created_at) VALUES (?, ?, ?)`, [userId, sectionId, Date.now()]);
+  const count = (await sqlGet<{ count: number }>(`SELECT COUNT(*) AS count FROM keel_like WHERE section_id = ?`, [sectionId]))?.count ?? 0;
   return { mine: !existing, count };
 }
 
-export function likeMap(userId?: string): Record<string, { count: number; mine: boolean }> {
-  const db = getDb();
-  const counts = db.prepare(`SELECT section_id, COUNT(*) AS count FROM keel_like GROUP BY section_id`).all() as {
-    section_id: string;
-    count: number;
-  }[];
+export async function likeMap(userId?: string): Promise<Record<string, { count: number; mine: boolean }>> {
+  await ensureRecords();
+  const counts = await sqlAll<{ section_id: string; count: number }>(`SELECT section_id, COUNT(*) AS count FROM keel_like GROUP BY section_id`);
   const mine = new Set<string>();
   if (userId) {
-    const rows = db.prepare(`SELECT section_id FROM keel_like WHERE user_id = ?`).all(userId) as { section_id: string }[];
+    const rows = await sqlAll<{ section_id: string }>(`SELECT section_id FROM keel_like WHERE user_id = ?`, [userId]);
     for (const row of rows) mine.add(row.section_id);
   }
   const out: Record<string, { count: number; mine: boolean }> = {};
@@ -107,13 +103,9 @@ export function likeMap(userId?: string): Record<string, { count: number; mine: 
   return out;
 }
 
-export function leaderboard(weekStart: number | null, userId?: string) {
-  const rows = getDb().prepare(leaderboardSql()).all(weekStart, weekStart) as {
-    user_id: string;
-    display_name: string;
-    xp: number;
-    cases: number;
-  }[];
+export async function leaderboard(weekStart: number | null, userId?: string) {
+  await ensureRecords();
+  const rows = await sqlAll<{ user_id: string; display_name: string; xp: number; cases: number }>(leaderboardSql(), [weekStart, weekStart]);
   return rows.map((row, index) => ({
     rank: index + 1,
     name: row.display_name,
@@ -123,48 +115,45 @@ export function leaderboard(weekStart: number | null, userId?: string) {
   }));
 }
 
-export function setConsent(userId: string, voice: boolean) {
-  getDb()
-    .prepare(
-      `INSERT INTO keel_consent (user_id, voice, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET voice = excluded.voice, updated_at = excluded.updated_at`,
-    )
-    .run(userId, voice ? 1 : 0, Date.now());
-}
-
-export function getConsent(userId: string): boolean {
-  const row = getDb().prepare(`SELECT voice FROM keel_consent WHERE user_id = ?`).get(userId) as { voice: number } | undefined;
-  return row?.voice === 1;
-}
-
-export function getProfile(userId: string) {
-  return (
-    (getDb()
-      .prepare(`SELECT display_name, role FROM keel_profile WHERE user_id = ?`)
-      .get(userId) as { display_name: string; role: string } | undefined) ?? null
+export async function setConsent(userId: string, voice: boolean) {
+  await ensureRecords();
+  await sqlRun(
+    `INSERT INTO keel_consent (user_id, voice, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET voice = excluded.voice, updated_at = excluded.updated_at`,
+    [userId, voice ? 1 : 0, Date.now()],
   );
 }
 
-export function setProfile(userId: string, displayName: string, role: "super_admin" | "staff" | "student") {
-  getDb()
-    .prepare(
-      `INSERT INTO keel_profile (user_id, display_name, role, created_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, role = excluded.role`,
-    )
-    .run(userId, displayName, role, Date.now());
+export async function getConsent(userId: string): Promise<boolean> {
+  await ensureRecords();
+  const row = await sqlGet<{ voice: number }>(`SELECT voice FROM keel_consent WHERE user_id = ?`, [userId]);
+  return row?.voice === 1;
+}
+
+export async function getProfile(userId: string) {
+  await ensureRecords();
+  return (await sqlGet<{ display_name: string; role: string }>(`SELECT display_name, role FROM keel_profile WHERE user_id = ?`, [userId])) ?? null;
+}
+
+export async function setProfile(userId: string, displayName: string, role: "super_admin" | "staff" | "student") {
+  await ensureRecords();
+  await sqlRun(
+    `INSERT INTO keel_profile (user_id, display_name, role, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, role = excluded.role`,
+    [userId, displayName, role, Date.now()],
+  );
 }
 
 export { getCohortSubmissions, updateTeacherEvaluation, type CohortSubmissionRecord } from "./db";
 
-export function exportFor(userId: string) {
-  const db = getDb();
-  const profile = db
-    .prepare(`SELECT display_name, role, created_at FROM keel_profile WHERE user_id = ?`)
-    .get(userId) as { display_name: string; role: string; created_at: number } | undefined;
-  const progress = db
-    .prepare(`SELECT item_id, kind, score, xp, detail, day, updated_at FROM keel_progress WHERE user_id = ?`)
-    .all(userId);
-  const likes = db.prepare(`SELECT section_id, created_at FROM keel_like WHERE user_id = ?`).all(userId);
-  const consent = getConsent(userId);
+export async function exportFor(userId: string) {
+  await ensureRecords();
+  const profile = await sqlGet<{ display_name: string; role: string; created_at: number }>(
+    `SELECT display_name, role, created_at FROM keel_profile WHERE user_id = ?`,
+    [userId],
+  );
+  const progress = await sqlAll(`SELECT item_id, kind, score, xp, detail, day, updated_at FROM keel_progress WHERE user_id = ?`, [userId]);
+  const likes = await sqlAll(`SELECT section_id, created_at FROM keel_like WHERE user_id = ?`, [userId]);
+  const consent = await getConsent(userId);
   return { profile: profile ?? null, progress, likes, voiceConsent: consent };
 }

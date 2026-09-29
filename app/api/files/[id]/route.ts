@@ -10,8 +10,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const user = await userFrom(request);
   if (!user) return json({ error: "auth" }, 401);
   const { id } = await context.params;
-  const staff = isStaffOrAdmin(getProfile(user.id)?.role, user.email);
-  const found = readUpload(id, user.id, staff);
+  const staff = isStaffOrAdmin((await getProfile(user.id))?.role, user.email);
+  const found = await readUpload(id, user.id, staff);
   if (!found) return json({ error: "file" }, 404);
   return new Response(new Uint8Array(found.bytes), {
     headers: {
@@ -26,6 +26,6 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   const user = await userFrom(request);
   if (!user) return json({ error: "auth" }, 401);
   const { id } = await context.params;
-  const staff = isStaffOrAdmin(getProfile(user.id)?.role, user.email);
-  return json({ ok: deleteUpload(id, user.id, staff) });
+  const staff = isStaffOrAdmin((await getProfile(user.id))?.role, user.email);
+  return json({ ok: await deleteUpload(id, user.id, staff) });
 }

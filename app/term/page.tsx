@@ -17,11 +17,11 @@ export default async function TermPage() {
   const locale = await resolveLocale();
   const m = t(locale);
   const user = await currentUser();
-  const profile = user ? getProfile(user.id) : null;
+  const profile = user ? await getProfile(user.id) : null;
   const staff = isStaffOrAdmin(profile?.role, user?.email);
-  const rows = user ? progressSummary(user.id, new Date().toISOString().slice(0, 10)).rows : [];
-  const catalogue = listWork();
-  const scores = ratings();
+  const rows = user ? (await progressSummary(user.id, new Date().toISOString().slice(0, 10))).rows : [];
+  const catalogue = await listWork();
+  const scores = await ratings();
   const suggestion = recommendWeeks(rows, scores.map((item) => ({ weekId: item.weekId, stars: item.stars })));
   return (
     <div className="mx-auto max-w-6xl px-5 pb-28 pt-12">
@@ -75,8 +75,8 @@ export default async function TermPage() {
   );
 }
 
-function Announcements({ m }: { m: ReturnType<typeof t> }) {
-  const notes = listAnnouncements().filter((note) => note.status === "published");
+async function Announcements({ m }: { m: ReturnType<typeof t> }) {
+  const notes = (await listAnnouncements()).filter((note) => note.status === "published");
   if (!notes.length) return null;
   return (
     <section className="mt-10">
@@ -93,8 +93,8 @@ function Announcements({ m }: { m: ReturnType<typeof t> }) {
   );
 }
 
-function Courses({ m }: { m: ReturnType<typeof t> }) {
-  const courses = listCourses().filter((course) => workOpen(course, Date.now()).open);
+async function Courses({ m }: { m: ReturnType<typeof t> }) {
+  const courses = (await listCourses()).filter((course) => workOpen(course, Date.now()).open);
   return (
     <section className="mt-10">
       <h2 className="text-2xl font-medium">{m.publishedCourses}</h2>

@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   if (!user) return json({ error: "auth" }, 401);
   const gated = await guard(request, "invite", 10, 10 * 60 * 1000, user.id);
   if (gated.error) return gated.error;
-  const code = createInvite(user.id);
+  const code = await createInvite(user.id);
   const origin = new URL(request.url).origin;
   return json({ code, url: `${origin}/sign-up?invite=${code}` });
 }

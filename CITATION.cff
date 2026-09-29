@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: If you use Keel, cite it with this metadata.
+title: Keel
+abstract: >-
+  An open academic programme for the development and operation of systems.
+  A learner reads, checks, labs, and files a capstone across a twelve-week
+  term. Accounts and progress can be kept in PostgreSQL. A written assessment
+  is reviewed and then discarded; the record keeps a hash and flags.
+type: software
+authors:
+  - name: Frank Asante Van Laarhoven
+repository-code: https://github.com/FrankAsanteVanLaarhoven/Keel
+url: https://keelai-os.vercel.app
+license: Apache-2.0
+version: 0.1.0
+date-released: 2026-09-29
+keywords:
+  - education
+  - systems
+  - devops
+  - learning

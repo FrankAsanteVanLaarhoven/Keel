@@ -158,6 +158,7 @@ export const es: Messages = {
   dataLikes: "Un «útil» se guarda como tu cuenta y la sección. El tablero solo muestra el recuento.",
   dataBoard: "La clasificación muestra el nombre que elegiste, tus puntos y cuántos casos aceptaste. No muestra tu correo.",
   dataCases: "Las notas de los casos solo las ves tú, en tu dossier y en una exportación que pidas.",
+  dataStore: "En un equipo que tú ejecutas, las cuentas y el progreso quedan en SQLite en ese equipo. En la clase pública quedan en PostgreSQL, así un reinicio no los borra. El texto de la evaluación se descarta tras la revisión. Los archivos de clase que sube un profesor se conservan para que el grupo pueda descargarlos.",
   dataFiles: "Un archivo que subes para una semana se lee en este servidor y luego se descarta. Keel guarda un hash y las marcas: si se lee como evaluación, cuánto usa el lenguaje de la semana y si coincide con otro envío o con el encargo. Las palabras no se guardan. Las frases de acceso se resumen. El inicio de sesión está limitado. La comprobación de la evaluación no tiene límite de ritmo.",
   dataDelete: "Puedes descargar tus datos o eliminar la cuenta. Eliminar quita el perfil, los casos, los «útiles» y la sesión.",
   fictional: "Caso ficticio. No es un sistema en producción.",

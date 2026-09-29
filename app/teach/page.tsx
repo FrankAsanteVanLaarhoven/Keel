@@ -19,7 +19,7 @@ export default async function TeachPage() {
   const locale = await resolveLocale();
   const m = t(locale);
   const user = await currentUser();
-  const profile = user ? getProfile(user.id) : null;
+  const profile = user ? await getProfile(user.id) : null;
   if (!user || !isStaffOrAdmin(profile?.role, user.email)) {
     return (
       <div className="mx-auto max-w-3xl px-5 py-20">
@@ -29,9 +29,12 @@ export default async function TeachPage() {
       </div>
     );
   }
-  const people = cohort();
-  const attempts = listAttempts().slice(0, 80);
-  const work = listWork();
+  const people = await cohort();
+  const attempts = (await listAttempts()).slice(0, 80);
+  const work = await listWork();
+  const reviews = await allReviews();
+  const today = new Date().toISOString().slice(0, 10);
+  const progress = await Promise.all(people.map(async (person) => (await progressSummary(person.id, today)).rows));
   return (
     <div className="mx-auto max-w-6xl px-5 pb-28 pt-12">
       <p className="kicker">{m.teachNav}</p>
@@ -52,8 +55,8 @@ export default async function TeachPage() {
             </tr>
           </thead>
           <tbody>
-            {people.map((person) => {
-              const rows = progressSummary(person.id, new Date().toISOString().slice(0, 10)).rows;
+            {people.map((person, index) => {
+              const rows = progress[index];
               return (
                 <tr key={person.id} className="border-t border-line">
                   <td className="py-3">{person.name}</td>
@@ -81,7 +84,7 @@ export default async function TeachPage() {
       <h2 className="mt-12 text-2xl font-medium">{m.reviewTitle}</h2>
       <p className="mt-2 max-w-2xl text-sm text-soft">{m.reviewHold}</p>
       <ul className="mt-4 divide-y divide-line border-y border-line">
-        {allReviews().map((review) => (
+        {reviews.map((review) => (
           <li key={review.id} className="flex flex-wrap justify-between gap-3 py-3 text-sm">
             <span>{review.name} · {review.weekId}</span>
             <span>{review.assessment ? m.reviewAssessment : m.reviewNotAssessment}</span>

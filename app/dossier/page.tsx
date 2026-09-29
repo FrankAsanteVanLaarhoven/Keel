@@ -26,7 +26,7 @@ export default async function DossierPage() {
   const pack = getPack(locale);
   const ops = getOps(locale);
   const user = await currentUser();
-  const rows = user ? listProgress(user.id).filter((row) => row.kind === "case" || row.kind === "brief" || row.kind === "ops-case" || row.kind === "ops-brief") : [];
+  const rows = user ? (await listProgress(user.id)).filter((row) => row.kind === "case" || row.kind === "brief" || row.kind === "ops-case" || row.kind === "ops-brief") : [];
   return (
     <div className="mx-auto max-w-3xl px-5 pb-28 pt-12">
       <p className="kicker">{m.dossier}</p>

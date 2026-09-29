@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     return json({ error: "auth" }, 401);
   }
 
-  const profile = getProfile(user.id);
+  const profile = await getProfile(user.id);
   const allowed = isStaffOrAdmin(profile?.role, user.email);
 
   if (!allowed) {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const teacherFeedback = typeof body.teacherFeedback === "string" ? body.teacherFeedback.slice(0, 2000) : null;
   const verified = typeof body.verified === "number" ? body.verified : 1;
 
-  updateTeacherEvaluation({
+  await updateTeacherEvaluation({
     userId: body.userId,
     itemId: body.itemId,
     kind: body.kind,

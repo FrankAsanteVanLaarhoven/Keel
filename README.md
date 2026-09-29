@@ -5,7 +5,7 @@
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFrankAsanteVanLaarhoven%2FKeel)
 [![Live class](https://img.shields.io/badge/Vercel-keelai--os.vercel.app-success?logo=vercel&style=for-the-badge)](https://keelai-os.vercel.app)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?logo=github&style=for-the-badge)](https://github.com/FrankAsanteVanLaarhoven/Keel)
-[![Tests](https://img.shields.io/badge/Tests-31%20Passing-emerald?style=for-the-badge)](tests/keel.test.ts)
+[![Tests](https://img.shields.io/badge/Tests-32%20Passing-emerald?style=for-the-badge)](tests/keel.test.ts)
 
 - **Public class**: [https://keelai-os.vercel.app](https://keelai-os.vercel.app)
 - **Source**: [https://github.com/FrankAsanteVanLaarhoven/Keel](https://github.com/FrankAsanteVanLaarhoven/Keel)
@@ -61,11 +61,15 @@ pnpm test
 pnpm typecheck
 ```
 
-Node 22.5 or newer. The public class is [https://keelai-os.vercel.app](https://keelai-os.vercel.app). On that host, account data lives in the server’s temporary store and does not survive a restart. For a class record that stays, run Keel on your own machine. Accounts, progress, and review flags then remain in SQLite under `.data/`.
+Node 22.5 or newer. The public class is [https://keelai-os.vercel.app](https://keelai-os.vercel.app).
+
+Set `DATABASE_URL` to a PostgreSQL connection string and Keel keeps accounts, progress, review flags, and teacher files in that database, including across a restart of the public class. Without `DATABASE_URL`, Keel uses SQLite. On this machine that file is `.data/keel.db`. On a host with neither a database URL nor a durable disk, a restart clears the SQLite file.
+
+Assessment text is read and then discarded in both places. A teacher’s class file is kept: on disk beside the SQLite file, or in PostgreSQL when `DATABASE_URL` is set.
 
 ## Accounts
 
-Sign-in is [Better Auth](https://better-auth.com), on this server, with SQLite in `.data/`. Passphrases are hashed by Better Auth. The session cookie is HttpOnly and is used only to keep the session. Keel does not use a hosted identity service, so account data is not sent to one.
+Sign-in is [Better Auth](https://better-auth.com) on this server. Keel does not use a separate identity provider. Passphrases are hashed. The session cookie is HttpOnly and is used only to keep the session. Account rows live in the database described above.
 
 Set `BETTER_AUTH_SECRET` in production (32 characters or more). Locally, if it is unset, Keel writes `.data/secret`. One designated address holds the super admin role. Any other request for that role is stored as a student.
 
@@ -84,3 +88,5 @@ The cases are fictional. Do not put real pupil, patient, or payment records into
 ## Licence
 
 Frank Asante Van Laarhoven. Apache-2.0. See [LICENSE](LICENSE).
+
+If you use this software, cite it with [CITATION.cff](CITATION.cff). A DOI is not attached.

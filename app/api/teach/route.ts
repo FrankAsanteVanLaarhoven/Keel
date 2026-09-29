@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 async function teacher(request: Request) {
   const user = await userFrom(request);
   if (!user) return { user: null, ok: false };
-  const profile = getProfile(user.id);
+  const profile = await getProfile(user.id);
   return { user, ok: isStaffOrAdmin(profile?.role, user.email) };
 }
 
@@ -20,11 +20,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const student = url.searchParams.get("student") ?? "";
   return json({
-    cohort: cohort(),
-    work: listWork(),
-    courses: listCourses(),
-    announcements: listAnnouncements(),
-    attempts: listAttempts(student || undefined).slice(0, 200),
+    cohort: await cohort(),
+    work: await listWork(),
+    courses: await listCourses(),
+    announcements: await listAnnouncements(),
+    attempts: (await listAttempts(student || undefined)).slice(0, 200),
   });
 }
 
@@ -48,19 +48,19 @@ export async function POST(request: Request) {
     publishAt?: number | null;
   };
   const status = body.status === "draft" || body.status === "scheduled" || body.status === "paused" || body.status === "published" ? body.status : null;
-  if (body.action === "restore" && body.id) return json({ ok: restoreWork(body.id) });
+  if (body.action === "restore" && body.id) return json({ ok: await restoreWork(body.id) });
   if (body.action === "course" && status && body.title && body.summary) {
-    const id = saveCourse({ id: body.id, title: body.title, summary: body.summary, status, opensAt: stamp(body.opensAt), closesAt: stamp(body.closesAt), userId: access.user.id });
+    const id = await saveCourse({ id: body.id, title: body.title, summary: body.summary, status, opensAt: stamp(body.opensAt), closesAt: stamp(body.closesAt), userId: access.user.id });
     return json({ ok: Boolean(id), id }, id ? 200 : 400);
   }
-  if (body.action === "course-delete" && body.id) return json({ ok: deleteCourse(body.id) });
+  if (body.action === "course-delete" && body.id) return json({ ok: await deleteCourse(body.id) });
   if (body.action === "announce" && status && body.title && body.body) {
-    const id = saveAnnouncement({ id: body.id, courseId: body.courseId ?? "", title: body.title, body: body.body, status, publishAt: stamp(body.publishAt), userId: access.user.id });
+    const id = await saveAnnouncement({ id: body.id, courseId: body.courseId ?? "", title: body.title, body: body.body, status, publishAt: stamp(body.publishAt), userId: access.user.id });
     return json({ ok: Boolean(id), id }, id ? 200 : 400);
   }
-  if (body.action === "announce-delete" && body.id) return json({ ok: deleteAnnouncement(body.id) });
+  if (body.action === "announce-delete" && body.id) return json({ ok: await deleteAnnouncement(body.id) });
   if (!body.id || !status || !body.title || !body.brief) return json({ error: "body" }, 400);
-  const ok = saveWork({
+  const ok = await saveWork({
     id: body.id,
     title: body.title,
     brief: body.brief,

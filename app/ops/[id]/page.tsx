@@ -28,7 +28,7 @@ export default async function OpsLevelPage({ params }: { params: Promise<{ id: s
   const pack = getOps(locale);
   const copy = pack.sections[meta.id];
   const user = await currentUser();
-  const rows = user ? listProgress(user.id) : [];
+  const rows = user ? await listProgress(user.id) : [];
   const previous = previousOpsId(meta.id);
   const done = (itemId: string, kind: string) => rows.some((row) => row.itemId === itemId && row.kind === kind && row.score === 1);
   const next = nextOpsId(meta.id);

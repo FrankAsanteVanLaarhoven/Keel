@@ -1,14 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { dataDir, getDb, insertProfile, wipeUser } from "./db";
+import { dataDir, ensureRecords, insertProfile, wipeUser } from "./db";
+import { authDatabase } from "./sql";
 import { cleanName, isDesignatedAdmin } from "./security";
 
 mkdirSync(dataDir, { recursive: true });
-getDb();
+void ensureRecords();
 
 function secret(): string {
   const fromEnv = process.env.BETTER_AUTH_SECRET?.trim();
@@ -36,7 +36,7 @@ export const auth = betterAuth({
   appName: "Keel",
   baseURL,
   secret: secret(),
-  database: new DatabaseSync(path.join(dataDir, "keel.db")),
+  database: authDatabase(),
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 12,
@@ -47,7 +47,7 @@ export const auth = betterAuth({
     deleteUser: {
       enabled: true,
       beforeDelete: async (user) => {
-        wipeUser(user.id);
+        await wipeUser(user.id);
       },
     },
   },
@@ -86,7 +86,7 @@ export const auth = betterAuth({
       create: {
         after: async (user) => {
           const name = cleanName(user.name) ?? "Learner";
-          insertProfile(user.id, name, isDesignatedAdmin(user.email) ? "super_admin" : "student");
+          await insertProfile(user.id, name, isDesignatedAdmin(user.email) ? "super_admin" : "student");
         },
       },
     },

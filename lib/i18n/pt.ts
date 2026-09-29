@@ -158,6 +158,7 @@ export const pt: Messages = {
   dataLikes: "Uma marca de útil guarda a sua conta e a seção. O quadro só mostra a contagem.",
   dataBoard: "A classificação mostra o nome que você escolheu, os seus pontos e quantos casos aceitou. Não mostra o seu e-mail.",
   dataCases: "As notas dos casos só você vê, no dossiê e numa exportação que pedir.",
+  dataStore: "Numa máquina que você executa, contas e progresso ficam em SQLite nessa máquina. Na turma pública ficam em PostgreSQL, e um reinício não os apaga. O texto da avaliação continua a ser descartado depois da revisão. Os ficheiros de turma enviados por um professor ficam disponíveis para descarregar.",
   dataFiles: "Um arquivo enviado para uma semana é lido neste servidor e depois descartado. O Keel guarda um hash e as marcas: se parece uma avaliação, quanto usa a linguagem da semana e se coincide com outro envio ou com o enunciado. As palavras não ficam. As frases secretas são resumidas. A entrada é limitada. A verificação da avaliação não é.",
   dataDelete: "Você pode baixar os seus dados ou apagar a conta. Apagar remove o perfil, os casos, as marcas e a sessão.",
   fictional: "Caso fictício. Não é um sistema em operação.",

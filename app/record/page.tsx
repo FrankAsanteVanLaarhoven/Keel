@@ -24,11 +24,11 @@ export default async function RecordPage() {
   const pack = getPack(locale);
   const ops = getOps(locale);
   const user = await currentUser();
-  const summary = user ? progressSummary(user.id, new Date().toISOString().slice(0, 10)) : null;
+  const summary = user ? await progressSummary(user.id, new Date().toISOString().slice(0, 10)) : null;
   const done = Boolean(summary?.rows.some((row) => row.kind === "brief" && row.score === 1));
   const opsDone = Boolean(summary?.rows.some((row) => row.kind === "ops-brief" && row.score === 1));
   const termDone = summary ? termComplete(summary.rows) : false;
-  const profile = user ? getProfile(user.id) : null;
+  const profile = user ? await getProfile(user.id) : null;
   const when = summary?.rows.find((row) => row.kind === "brief" && row.score === 1)?.updatedAt;
   const opsWhen = summary?.rows.find((row) => row.kind === "ops-brief" && row.score === 1)?.updatedAt;
   return (

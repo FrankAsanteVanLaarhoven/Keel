@@ -28,16 +28,16 @@ export async function POST(request: Request) {
   const locale = await resolveLocale();
   const gradeItem = kind === "brief" ? "harbor" : kind === "ops-brief" ? "northline" : (body.sectionId ?? "");
   const gradeKind = kind === "check" && opsSection ? "check" : (opsKind ?? kind ?? "");
-  const profile = user ? getProfile(user.id) : null;
+  const profile = user ? await getProfile(user.id) : null;
   const staff = isStaffOrAdmin(profile?.role, user?.email);
-  const rows = user ? progressSummary(user.id, clientDay(body.day)).rows : [];
+  const rows = user ? (await progressSummary(user.id, clientDay(body.day))).rows : [];
   const week = weekForItem(gradeItem, gradeKind);
   const gate = termGate({
     itemId: gradeItem,
     kind: gradeKind,
     rows,
     staff,
-    work: week ? workFor(week.id) : null,
+    work: week ? await workFor(week.id) : null,
     now: Date.now(),
   });
   if (!gate.open) return json({ correct: false, locked: true, saved: false, why: [] });
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     if (!opsGradeKind || (opsGradeKind !== "ops-brief" && !opsSection)) return json({ error: "section" }, 404);
     const ops = getOps(locale);
     const hint = opsGradeKind === "ops-brief" ? ops.brief.noteHint : ops.sections[opsSection!.id].noteHint;
-    const rows = user ? progressSummary(user.id, clientDay(body.day)).rows : [];
+    const rows = user ? (await progressSummary(user.id, clientDay(body.day))).rows : [];
     const result = gradeOps({
       kind: opsGradeKind,
       sectionId: body.sectionId,
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     });
     let saved = false;
     if (user && result.correct && !result.locked) {
-      const record = saveProgress({
+      const record = await saveProgress({
         userId: user.id,
         itemId: opsGradeKind === "ops-brief" ? "northline" : (body.sectionId as string),
         kind: opsGradeKind,
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       });
       saved = record.saved;
     }
-    if (user && !result.locked) recordAttempt({ userId: user.id, itemId: opsGradeKind === "ops-brief" ? "northline" : (body.sectionId as string), kind: opsGradeKind, correct: result.correct });
+    if (user && !result.locked) await recordAttempt({ userId: user.id, itemId: opsGradeKind === "ops-brief" ? "northline" : (body.sectionId as string), kind: opsGradeKind, correct: result.correct });
     return json({
       correct: result.correct,
       saved,
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
   if (kind !== "brief" && !sectionById(body.sectionId ?? "")) return json({ error: "section" }, 404);
   const pack = getPack(locale);
   const hint = kind === "brief" ? pack.brief.noteHint : pack.sections[sectionById(body.sectionId ?? "")!.id].noteHint;
-  const casesDone = user ? progressSummary(user.id, clientDay(body.day)).cases : 0;
+  const casesDone = user ? (await progressSummary(user.id, clientDay(body.day))).cases : 0;
   const result = gradeAttempt({
     kind,
     sectionId: body.sectionId,
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   });
   let saved = false;
   if (user && !result.locked) {
-    const record = saveProgress({
+    const record = await saveProgress({
       userId: user.id,
       itemId: kind === "brief" ? "harbor" : (body.sectionId as string),
       kind,
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     });
     saved = record.saved && result.correct;
   }
-  if (user && !result.locked) recordAttempt({ userId: user.id, itemId: kind === "brief" ? "harbor" : (body.sectionId as string), kind, correct: result.correct });
+  if (user && !result.locked) await recordAttempt({ userId: user.id, itemId: kind === "brief" ? "harbor" : (body.sectionId as string), kind, correct: result.correct });
   return json({
     correct: result.correct,
     saved,

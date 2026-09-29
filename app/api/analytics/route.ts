@@ -1,11 +1,12 @@
 import { guard, json } from "@/lib/http";
 import { userFrom } from "@/lib/ready";
 import { getAnalyticsOverview, recordAnalytics } from "@/lib/db";
+import { usesPostgres } from "@/lib/sql";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const overview = getAnalyticsOverview();
+  const overview = await getAnalyticsOverview();
   return json({
     ok: true,
     overview,
@@ -17,7 +18,7 @@ export async function GET() {
       cacheHitRatio: "87.4%",
       curriculumCompletionRate: "92.1%",
       zeroThirdPartyTrackers: true,
-      dataSovereignty: "Local SQLite / WAL",
+      dataSovereignty: usesPostgres() ? "PostgreSQL" : "SQLite on this machine",
     },
   });
 }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
   const cleanEvent = body.eventType.slice(0, 64);
   const cleanEntity = typeof body.entityId === "string" ? body.entityId.slice(0, 64) : undefined;
   
-  recordAnalytics(cleanEvent, cleanEntity, body.metadata);
+  await recordAnalytics(cleanEvent, cleanEntity, body.metadata);
 
   return json({ recorded: true, event: cleanEvent });
 }

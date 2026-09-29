@@ -11,21 +11,21 @@ import { getProfile } from "@/lib/store";
 import { workOpen } from "@/lib/term";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const course = courseById((await params).id);
+  const course = await courseById((await params).id);
   return { title: course ? `${course.title} — Keel` : "Keel", robots: { index: false, follow: false } };
 }
 
 export default async function CoursePage({ params }: { params: Promise<{ id: string }> }) {
-  const course = courseById((await params).id);
+  const course = await courseById((await params).id);
   if (!course) notFound();
   const locale = await resolveLocale();
   const m = t(locale);
   const user = await currentUser();
-  const staff = isStaffOrAdmin(user ? getProfile(user.id)?.role : null, user?.email);
+  const staff = isStaffOrAdmin(user ? (await getProfile(user.id))?.role : null, user?.email);
   const open = workOpen(course, Date.now()).open;
   if (!open && !staff) notFound();
-  const files = filesFor(course.id, user?.id ?? "", staff).filter((file) => file.scope === "class");
-  const notes = listAnnouncements().filter((note) => note.courseId === course.id && (note.status === "published" || staff));
+  const files = (await filesFor(course.id, user?.id ?? "", staff)).filter((file) => file.scope === "class");
+  const notes = (await listAnnouncements()).filter((note) => note.courseId === course.id && (note.status === "published" || staff));
   return (
     <article className="mx-auto w-full max-w-[42rem] px-5 pb-36 pt-10">
       <p className="kicker">{m.publishedCourses}</p>

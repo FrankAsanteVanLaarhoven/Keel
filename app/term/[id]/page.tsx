@@ -23,14 +23,14 @@ export default async function WeekPage({ params }: { params: Promise<{ id: strin
   const locale = await resolveLocale();
   const m = t(locale);
   const user = await currentUser();
-  const profile = user ? getProfile(user.id) : null;
+  const profile = user ? await getProfile(user.id) : null;
   const staff = isStaffOrAdmin(profile?.role, user?.email);
-  const rows = user ? progressSummary(user.id, new Date().toISOString().slice(0, 10)).rows : [];
-  const work = listWork().find((item) => item.id === week.id) ?? null;
+  const rows = user ? (await progressSummary(user.id, new Date().toISOString().slice(0, 10))).rows : [];
+  const work = (await listWork()).find((item) => item.id === week.id) ?? null;
   const window = workOpen(work, Date.now());
   const ready = staff || (window.open && (week.no === 1 || previousWeeksDone(week, rows)));
-  const files = user ? filesFor(week.id, user.id, staff) : [];
-  const reviews = user ? reviewsFor(week.id, user.id, staff) : [];
+  const files = user ? await filesFor(week.id, user.id, staff) : [];
+  const reviews = user ? await reviewsFor(week.id, user.id, staff) : [];
   return (
     <article className="mx-auto w-full max-w-[42rem] px-5 pb-36 pt-10">
       <p className="kicker">{m.termNav} · {String(week.no).padStart(2, "0")}</p>

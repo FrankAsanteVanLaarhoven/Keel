@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const user = await userFrom(request);
-  if (!user || !getConsent(user.id) || !liveEnabled() || !hasTts()) return json({ error: "auth" }, 401);
+  if (!user || !(await getConsent(user.id)) || !liveEnabled() || !hasTts()) return json({ error: "auth" }, 401);
   const gated = await guard(request, "utter", 30, 10 * 60 * 1000, user.id);
   if (gated.error || !gated.body || typeof gated.body !== "object") return gated.error ?? json({ error: "body" }, 400);
   const row = takeUtterance(user.id, (gated.body as { id?: string }).id ?? "");

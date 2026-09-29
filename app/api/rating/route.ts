@@ -5,7 +5,7 @@ import { userFrom } from "@/lib/ready";
 export const runtime = "nodejs";
 
 export async function GET() {
-  return json({ ratings: ratings() });
+  return json({ ratings: await ratings() });
 }
 
 export async function POST(request: Request) {
@@ -14,6 +14,6 @@ export async function POST(request: Request) {
   const gated = await guard(request, "rating", 20, 10 * 60 * 1000, user.id);
   if (gated.error || !gated.body || typeof gated.body !== "object") return gated.error ?? json({ error: "body" }, 400);
   const body = gated.body as { weekId?: string; stars?: number; note?: string };
-  const ok = rateWeek(user.id, body.weekId ?? "", Number(body.stars), body.note ?? "");
+  const ok = await rateWeek(user.id, body.weekId ?? "", Number(body.stars), body.note ?? "");
   return json({ ok }, ok ? 200 : 400);
 }

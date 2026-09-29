@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const body = gated.body as { challengeId?: string };
   const challengeId = (body.challengeId ?? "freeform").slice(0, 40);
 
-  const record = saveProgress({
+  const record = await saveProgress({
     userId: user.id,
     itemId: challengeId,
     kind: "foundry",

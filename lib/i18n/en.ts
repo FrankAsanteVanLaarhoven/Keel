@@ -158,6 +158,7 @@ export const en = {
   dataCases: "Case notes are visible only to you, in your dossier and in an export you request.",
   dataDelete: "You can download your data or delete the account. Deletion removes the profile, the cases, the likes, the session, and the review flags.",
   dataFiles: "A file you upload for a week is read on this server, then discarded. Keel keeps a hash and the review flags: whether it reads as an assessment, how much of the week's language it uses, and whether it matches another submission or the week brief. The words of the file are not kept. Passphrases are hashed. Sign-in is limited so a passphrase cannot be guessed. The assessment check itself is not rate limited.",
+  dataStore: "On a machine you run, accounts and progress stay in SQLite on that machine. On the public class they stay in PostgreSQL, so a restart does not remove them. Assessment text is still discarded after review. Class files a teacher uploads are kept so the class can download them.",
   fictional: "Fictional case. Not a live system.",
   rateLimited: "Too many attempts. Wait a moment and try again.",
   genericError: "That did not succeed. Try again.",

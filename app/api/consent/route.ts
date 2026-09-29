@@ -9,6 +9,6 @@ export async function POST(request: Request) {
   if (!user) return json({ ok: true, stored: "device" });
   const gated = await guard(request, "consent", 20, 60 * 60 * 1000, user.id);
   if (gated.error || !gated.body || typeof gated.body !== "object") return gated.error ?? json({ error: "body" }, 400);
-  setConsent(user.id, (gated.body as { voice?: unknown }).voice === true);
+  await setConsent(user.id, (gated.body as { voice?: unknown }).voice === true);
   return json({ ok: true });
 }

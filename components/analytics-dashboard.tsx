@@ -241,7 +241,7 @@ export function AnalyticsDashboard({ m, overview }: Props) {
               <span className="text-good font-bold text-xs">Zero Leaks</span>
             </div>
             <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-ink">100%</p>
-            <p className="mt-1 text-[11px] text-soft">Local SQLite / 0 Trackers</p>
+            <p className="mt-1 text-[11px] text-soft">No ad cookies</p>
           </div>
         </div>
       </section>

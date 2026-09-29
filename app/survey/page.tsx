@@ -17,9 +17,9 @@ export default async function SurveyPage() {
   const locale = await resolveLocale();
   const m = t(locale);
   const user = await currentUser();
-  const rows = user ? progressSummary(user.id, new Date().toISOString().slice(0, 10)).rows : [];
+  const rows = user ? (await progressSummary(user.id, new Date().toISOString().slice(0, 10))).rows : [];
   const open = termComplete(rows);
-  const existing = user ? surveyFor(user.id) : null;
+  const existing = user ? await surveyFor(user.id) : null;
   return (
     <article className="mx-auto w-full max-w-[42rem] px-5 pb-36 pt-10">
       <p className="kicker">{m.termNav}</p>
