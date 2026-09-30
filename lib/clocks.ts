@@ -286,6 +286,32 @@ export function clockOptions(locale: string, localLabel: string): { id: string; 
   return [{ id: localClockId, label: localLabel }, ...countries];
 }
 
+/** Keeps the name that was on the clock, and the country name when they differ. */
+export function clockChoiceLabel(shown: string, country: string): string {
+  const place = country.trim();
+  const seen = shown.trim();
+  if (!seen || seen === place) return place || seen;
+  const bare = place.replace(new RegExp(`\\s*\\(${escapeRegExp(seen)}\\)\\s*$`), "").trim();
+  if (!bare || bare === seen) return seen;
+  return `${seen}, ${bare}`;
+}
+
+/**
+ * Countries that can be put on the clock. A removed place stays here.
+ * Starter clocks that are not showing come first, then the rest of the catalog.
+ */
+export function addableClockIds(showing: readonly string[], orderedIds: readonly string[]): string[] {
+  const on = new Set(showing);
+  const pinned = defaultClockIds.filter((id) => !on.has(id));
+  const pinnedSet = new Set<string>(pinned);
+  const rest = orderedIds.filter((id) => knownClockIds.has(id) && !on.has(id) && !pinnedSet.has(id));
+  return [...pinned, ...rest];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function findClocks(query: string, locale: string): string[] {
   const needle = norm(query);
   if (!needle) return [];

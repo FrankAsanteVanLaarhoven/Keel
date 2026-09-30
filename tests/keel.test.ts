@@ -25,7 +25,7 @@ import { bindPlaceholders, isDatabaseWaking, sqlGet } from "../lib/sql";
 import { matchAccept } from "../lib/locale";
 import { cacheControlFor, canResetPassphrase, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, passphraseAttemptLimit, passphraseOk, publicSignInLimit, publicSignUpLimit, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
-import { clockLimit, clockName, clockPlaces, clocksFromStorage, defaultClockIds, findClocks, localClockId } from "../lib/clocks";
+import { addableClockIds, clockChoiceLabel, clockLimit, clockName, clockOptions, clockPlaces, clocksFromStorage, defaultClockIds, findClocks, localClockId } from "../lib/clocks";
 import { markdownBlocks, markdownInlines } from "../lib/markdown";
 import { saveProgress, exportFor, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import {
@@ -781,6 +781,22 @@ describe("world clock", () => {
     expect(findClocks("no such country", "en")).toEqual([]);
     expect(clockName("Africa/Accra", "en")).toBe("Ghana");
     expect(clockName("America/Chicago", "en")).toBe("United States (Chicago)");
+    const showing = ["local", "America/New_York", "Africa/Lagos", "Asia/Tokyo"];
+    const ordered = clockOptions("en", "Local").map((item) => item.id);
+    const addable = addableClockIds(showing, ordered);
+    expect(addable[0]).toBe("Europe/London");
+    expect(addable).not.toContain("America/New_York");
+    expect(addable).toContain("Africa/Accra");
+    expect(new Set(addable).size).toBe(addable.length);
+    for (const id of [localClockId, ...clockPlaces.map((place) => place.zone)]) {
+      expect(showing.includes(id) || addable.includes(id)).toBe(true);
+    }
+    expect(clockChoiceLabel("London", "United Kingdom")).toBe("London, United Kingdom");
+    expect(clockChoiceLabel("New York", "United States (New York)")).toBe("New York, United States");
+    expect(clockChoiceLabel("Ghana", "Ghana")).toBe("Ghana");
+    const withoutLondon = clocksFromStorage(JSON.stringify(["local", "America/New_York"]));
+    expect(withoutLondon).not.toContain("Europe/London");
+    expect(clocksFromStorage(JSON.stringify([...withoutLondon, "Europe/London"]))).toContain("Europe/London");
     const zones = new Set<string>();
     for (const place of clockPlaces) {
       expect(place.region).toMatch(/^[A-Z]{2}$/);

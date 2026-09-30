@@ -6,6 +6,8 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import { dirFor, htmlLang, locales, type Locale } from "@/lib/locale";
 import type { Messages } from "@/lib/i18n/en";
 import {
+  addableClockIds,
+  clockChoiceLabel,
   clockLimit,
   clockName,
   clockOptions,
@@ -267,7 +269,8 @@ function ClockMenu({
   options: { id: string; label: string }[];
   onChoose: (value: string) => void;
 }) {
-  const available = options.filter((item) => !clockIds.includes(item.id));
+  const available = addableClockIds(clockIds, options.map((item) => item.id));
+  const countryById = new Map(options.map((item) => [item.id, item.label]));
   return (
     <select
       className="max-w-36 bg-transparent text-sm"
@@ -285,8 +288,10 @@ function ClockMenu({
       ) : null}
       {clockIds.length < clockLimit && available.length > 0 ? (
         <optgroup label={m.clockAdd}>
-          {available.map((item) => (
-            <option key={`add:${item.id}`} value={`add:${item.id}`}>{item.label}</option>
+          {available.map((id) => (
+            <option key={`add:${id}`} value={`add:${id}`}>
+              {clockChoiceLabel(clockLabel(id, locale, m), countryById.get(id) ?? clockName(id, locale))}
+            </option>
           ))}
         </optgroup>
       ) : null}
