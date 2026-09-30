@@ -1,5 +1,6 @@
 import { guard, json, settle } from "@/lib/http";
 import { PipelineError, type DatasetFile, type OutputKind } from "@/lib/pipeline";
+import { isUniqueViolation } from "@/lib/sql";
 import {
   createPipelineBranch,
   deliverBranch,
@@ -65,6 +66,7 @@ export function POST(request: Request) {
 
 function failure(error: unknown) {
   if (error instanceof PipelineError) return json({ error: error.code }, 400);
+  if (isUniqueViolation(error)) return json({ error: "name" }, 400);
   throw error;
 }
 

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ensureRecords } from "./db";
-import { sqlAll, sqlGet, sqlRun } from "./sql";
+import { isUniqueViolation, sqlAll, sqlGet, sqlRun, usesPostgres, withTransaction } from "./sql";
 import {
   checkStatement,
   datasetNameOk,
@@ -11,6 +11,7 @@ import {
   ordersSample,
   parseDatasetFiles,
   PipelineError,
+  recordsEngine,
   runTransform,
   staleTransformIds,
   type BuildStep,
@@ -91,23 +92,25 @@ export async function createPipelineBranch(ownerId: string, name: string, fromNa
   await ensureRecords();
   if (!datasetNameOk(name) || name === "main") throw new PipelineError("name");
   const from = await openBranch(ownerId, fromName || "main");
-  const existing = await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_branch WHERE owner_id = ? AND name = ?`, [ownerId, name]);
-  if (existing) throw new PipelineError("name");
-  const branchId = id();
-  await sqlRun(
-    `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, ?, ?, ?)`,
-    [branchId, ownerId, name, from.id, Date.now()],
-  );
-  const transforms = await sqlAll<TransformRow>(`SELECT id, name, inputs_json, statement, output_name, output_kind, object_type, grain FROM keel_pipe_transform WHERE branch_id = ?`, [from.id]);
-  for (const transform of transforms) {
+  return withTransaction(async () => {
+    const existing = await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_branch WHERE owner_id = ? AND name = ?`, [ownerId, name]);
+    if (existing) throw new PipelineError("name");
+    const branchId = id();
     await sqlRun(
-      `INSERT INTO keel_pipe_transform (id, owner_id, branch_id, name, inputs_json, statement, output_name, output_kind, object_type, grain, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id(), ownerId, branchId, transform.name, transform.inputs_json, transform.statement, transform.output_name, transform.output_kind, transform.object_type, transform.grain, Date.now()],
+      `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [branchId, ownerId, name, from.id, Date.now()],
     );
-  }
-  const created = await mustBranch(ownerId, name);
-  return viewOf(ownerId, created);
+    const transforms = await sqlAll<TransformRow>(`SELECT id, name, inputs_json, statement, output_name, output_kind, object_type, grain FROM keel_pipe_transform WHERE branch_id = ?`, [from.id]);
+    for (const transform of transforms) {
+      await sqlRun(
+        `INSERT INTO keel_pipe_transform (id, owner_id, branch_id, name, inputs_json, statement, output_name, output_kind, object_type, grain, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id(), ownerId, branchId, transform.name, transform.inputs_json, transform.statement, transform.output_name, transform.output_kind, transform.object_type, transform.grain, Date.now()],
+      );
+    }
+    const created = await mustBranch(ownerId, name);
+    return viewOf(ownerId, created);
+  });
 }
 
 export async function saveTransform(ownerId: string, branchName: string, draft: TransformDef): Promise<PipelineView> {
@@ -142,9 +145,11 @@ export async function saveTransform(ownerId: string, branchName: string, draft: 
 export async function removeTransform(ownerId: string, branchName: string, transformId: string): Promise<PipelineView> {
   await ensureRecords();
   const branch = await openBranch(ownerId, branchName);
-  await sqlRun(`DELETE FROM keel_pipe_run WHERE owner_id = ? AND transform_id = ?`, [ownerId, transformId]);
-  await sqlRun(`DELETE FROM keel_pipe_transform WHERE id = ? AND owner_id = ? AND branch_id = ?`, [transformId, ownerId, branch.id]);
-  return viewOf(ownerId, branch);
+  return withTransaction(async () => {
+    await sqlRun(`DELETE FROM keel_pipe_run WHERE owner_id = ? AND transform_id = ?`, [ownerId, transformId]);
+    await sqlRun(`DELETE FROM keel_pipe_transform WHERE id = ? AND owner_id = ? AND branch_id = ?`, [transformId, ownerId, branch.id]);
+    return viewOf(ownerId, branch);
+  });
 }
 
 export async function previewTransform(ownerId: string, branchName: string, transformId: string): Promise<{ columns: PipelineColumn[]; rows: DatasetVersion["rows"] }> {
@@ -163,58 +168,63 @@ export async function previewTransform(ownerId: string, branchName: string, tran
 
 export async function deliverBranch(ownerId: string, branchName: string): Promise<PipelineView> {
   await ensureRecords();
-  const branch = await openBranch(ownerId, branchName);
-  const datasets = await resolvedDatasets(ownerId, branch);
-  const transforms = await transformsOf(branch.id);
-  const runs = await runsOf(branch.id);
-  const result = deliverGraph({ datasets, transforms, runs });
-  const buildId = id();
-  for (const item of result.produced) {
-    if (item.kind === "dataset") {
-      const version = (await maxVersion(branch.id, item.name)) + 1;
+  return withTransaction(async () => {
+    const branch = await openBranch(ownerId, branchName);
+    if (usesPostgres()) await sqlGet(`SELECT id FROM keel_pipe_branch WHERE id = ? FOR UPDATE`, [branch.id]);
+    const datasets = await resolvedDatasets(ownerId, branch);
+    const transforms = await transformsOf(branch.id);
+    const runs = await runsOf(branch.id);
+    const result = deliverGraph({ datasets, transforms, runs });
+    const buildId = id();
+    for (const item of result.produced) {
+      if (item.kind === "dataset") {
+        const version = (await maxVersion(branch.id, item.name)) + 1;
+        await sqlRun(
+          `INSERT INTO keel_pipe_dataset (id, owner_id, branch_id, name, version, files_json, columns_json, rows_json, content_hash, build_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id(), ownerId, branch.id, item.name, version, JSON.stringify(item.files), JSON.stringify(item.columns), JSON.stringify(item.rows), item.hash, buildId, Date.now()],
+        );
+      } else {
+        const version = (await maxObjectVersion(branch.id, item.name)) + 1;
+        await sqlRun(
+          `INSERT INTO keel_pipe_object (id, owner_id, branch_id, name, grain, version, columns_json, rows_json, content_hash, build_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id(), ownerId, branch.id, item.name, item.grain, version, JSON.stringify(item.columns), JSON.stringify(item.rows), item.hash, buildId, Date.now()],
+        );
+      }
+      const transform = transforms.find((candidate) => candidate.id === item.transformId);
+      if (!transform) continue;
       await sqlRun(
-        `INSERT INTO keel_pipe_dataset (id, owner_id, branch_id, name, version, files_json, columns_json, rows_json, content_hash, build_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id(), ownerId, branch.id, item.name, version, JSON.stringify(item.files), JSON.stringify(item.columns), JSON.stringify(item.rows), item.hash, buildId, Date.now()],
-      );
-    } else {
-      const version = (await maxObjectVersion(branch.id, item.name)) + 1;
-      await sqlRun(
-        `INSERT INTO keel_pipe_object (id, owner_id, branch_id, name, grain, version, columns_json, rows_json, content_hash, build_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id(), ownerId, branch.id, item.name, item.grain, version, JSON.stringify(item.columns), JSON.stringify(item.rows), item.hash, buildId, Date.now()],
+        `INSERT INTO keel_pipe_run (id, owner_id, branch_id, transform_id, input_hashes_json, output_hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id(), ownerId, branch.id, item.transformId, JSON.stringify({ hashes: item.inputHashes, definition: definitionOf(transform) }), item.hash, Date.now()],
       );
     }
-    const transform = transforms.find((candidate) => candidate.id === item.transformId);
-    if (!transform) continue;
     await sqlRun(
-      `INSERT INTO keel_pipe_run (id, owner_id, branch_id, transform_id, input_hashes_json, output_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id(), ownerId, branch.id, item.transformId, JSON.stringify({ hashes: item.inputHashes, definition: definitionOf(transform) }), item.hash, Date.now()],
+      `INSERT INTO keel_pipe_build (id, owner_id, branch_id, status, engine, steps_json, spark_plan, flink_plan, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [buildId, ownerId, branch.id, result.status, recordsEngine, JSON.stringify(result.steps), result.spark, result.flink, Date.now()],
     );
-  }
-  await sqlRun(
-    `INSERT INTO keel_pipe_build (id, owner_id, branch_id, status, engine, steps_json, spark_plan, flink_plan, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [buildId, ownerId, branch.id, result.status, "records", JSON.stringify(result.steps), result.spark, result.flink, Date.now()],
-  );
-  return viewOf(ownerId, branch);
+    return viewOf(ownerId, branch);
+  });
 }
 
 export async function openOrdersSample(ownerId: string, branchName: string): Promise<PipelineView> {
   await ensureRecords();
-  const sample = ordersSample();
-  const branch = await openBranch(ownerId, branchName);
-  for (const dataset of sample.datasets) {
-    const taken = await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_dataset WHERE branch_id = ? AND name = ?`, [branch.id, dataset.name]);
-    if (taken) throw new PipelineError("name");
-    await landDataset(ownerId, branch.name, dataset.name, dataset.files);
-  }
-  const takenOutput = await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_transform WHERE branch_id = ? AND output_name = ?`, [branch.id, sample.transform.outputName]);
-  if (!takenOutput) {
-    await saveTransform(ownerId, branch.name, { ...sample.transform, id: "" });
-  }
-  return viewOf(ownerId, branch);
+  return withTransaction(async () => {
+    const sample = ordersSample();
+    const branch = await openBranch(ownerId, branchName);
+    for (const dataset of sample.datasets) {
+      const taken = await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_dataset WHERE branch_id = ? AND name = ?`, [branch.id, dataset.name]);
+      if (taken) throw new PipelineError("name");
+      await landDataset(ownerId, branch.name, dataset.name, dataset.files);
+    }
+    const takenOutput = await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_transform WHERE branch_id = ? AND output_name = ?`, [branch.id, sample.transform.outputName]);
+    if (!takenOutput) {
+      await saveTransform(ownerId, branch.name, { ...sample.transform, id: "" });
+    }
+    return viewOf(ownerId, branch);
+  });
 }
 
 export async function pipelineExport(ownerId: string) {
@@ -309,10 +319,17 @@ async function openBranch(ownerId: string, name: string): Promise<BranchRow> {
   if (found) return found;
   if (name && name !== "main") throw new PipelineError("missing");
   const branchId = id();
-  await sqlRun(
-    `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, 'main', NULL, ?)`,
-    [branchId, ownerId, Date.now()],
-  );
+  try {
+    await sqlRun(
+      `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, 'main', NULL, ?)`,
+      [branchId, ownerId, Date.now()],
+    );
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    const raced = await sqlGet<BranchRow>(`SELECT id, name, base_id FROM keel_pipe_branch WHERE owner_id = ? AND name = 'main'`, [ownerId]);
+    if (raced) return raced;
+    throw new PipelineError("name");
+  }
   return { id: branchId, name: "main", base_id: null };
 }
 

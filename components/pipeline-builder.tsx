@@ -28,7 +28,7 @@ type View = {
     status: string;
     engine: string;
     at: number;
-    steps: { name: string; status: string; rows?: number; error?: string }[];
+    steps: { transformId: string; name: string; status: string; rows?: number; error?: string }[];
     spark: string;
     flink: string;
   };
@@ -122,6 +122,7 @@ export function PipelineBuilder({ m }: { m: Messages }) {
     setPreview(null);
     setView(body as View);
     if (payload.action === "deliver" && body.build?.status === "failed") setProblem(m.pipelineFailed);
+    else if (payload.action === "deliver" && body.build?.status === "current") setNotice(m.pipelineCurrent);
     else if (okMessage) setNotice(okMessage);
     return body as View;
   }
@@ -377,10 +378,10 @@ function BuildRecord({ m, build }: { m: Messages; build: NonNullable<View["build
   return (
     <div className="mt-8">
       <h2 className="text-2xl font-medium">{m.pipelineEngine}</h2>
-      <p className="mt-2 text-sm" role="status">{build.status === "built" ? m.pipelineBuilt : m.pipelineFailed}</p>
+      <p className="mt-2 text-sm" role="status">{buildSentence(build.status, m)}</p>
       <ul className="mt-3 grid gap-2">
         {build.steps.map((step) => (
-          <li key={step.name} className="text-sm">{step.name} · {step.status}{step.rows != null ? ` · ${m.pipelineRows} ${step.rows}` : ""}{step.error ? ` · ${pipelineError(step.error, m)}` : ""}</li>
+          <li key={step.transformId} className="text-sm">{step.name} · {buildSentence(step.status, m)}{step.rows != null ? ` · ${m.pipelineRows} ${step.rows}` : ""}{step.error ? ` · ${pipelineError(step.error, m)}` : ""}</li>
         ))}
       </ul>
       <h3 className="mt-6 text-lg font-medium">{m.pipelineSpark}</h3>
@@ -389,6 +390,12 @@ function BuildRecord({ m, build }: { m: Messages; build: NonNullable<View["build
       <pre className="mt-2 overflow-x-auto border border-line p-3 text-xs">{build.flink}</pre>
     </div>
   );
+}
+
+function buildSentence(status: string, m: Messages): string {
+  if (status === "built") return m.pipelineBuilt;
+  if (status === "current") return m.pipelineCurrent;
+  return m.pipelineFailed;
 }
 
 function pipelineError(code: string, m: Messages): string {

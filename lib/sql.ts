@@ -1,7 +1,8 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { Pool, types as pgTypes } from "pg";
+import { Pool, type PoolClient, types as pgTypes } from "pg";
 
 pgTypes.setTypeParser(20, (value) => Number(value));
 pgTypes.setTypeParser(1700, (value) => Number(value));
@@ -28,6 +29,10 @@ export function bindPlaceholders(statement: string, postgres: boolean): string {
 
 let pool: Pool | null = null;
 let sqlite: DatabaseSync | null = null;
+// One checked-out connection per request. A shared client would mix two deliveries.
+const sqlTransaction = new AsyncLocalStorage<PoolClient>();
+let sqliteHeld = false;
+let sqliteQueue: Promise<void> = Promise.resolve();
 
 export function authDatabase(): Pool | DatabaseSync {
   return usesPostgres() ? postgresPool() : sqliteDb();
@@ -72,6 +77,62 @@ export function isDatabaseWaking(error: unknown): boolean {
   return /timeout|ECONNRESET|ECONNREFUSED|EAI_AGAIN|Connection terminated|Connection ended|too many clients|the database system is starting|57P01|53300|08000|08006|57P03/i.test(`${code} ${message}`);
 }
 
+export function isUniqueViolation(error: unknown): boolean {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return code === "23505" || /UNIQUE constraint failed/i.test(message);
+}
+
+export async function withTransaction<T>(run: () => Promise<T>): Promise<T> {
+  if (usesPostgres()) {
+    if (sqlTransaction.getStore()) return run();
+    const client = await postgresPool().connect();
+    try {
+      await client.query("BEGIN");
+      const value = await sqlTransaction.run(client, run);
+      await client.query("COMMIT");
+      return value;
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        /* the connection already closed */
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  if (sqliteHeld) return run();
+  // One file connection. A second BEGIN on it fails, so writers wait their turn.
+  const previous = sqliteQueue;
+  let release: () => void = () => {};
+  sqliteQueue = new Promise((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  sqliteHeld = true;
+  const db = sqliteDb();
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const value = await run();
+      db.exec("COMMIT");
+      return value;
+    } catch (error) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* the transaction already ended */
+      }
+      throw error;
+    }
+  } finally {
+    sqliteHeld = false;
+    release();
+  }
+}
+
 async function withWake<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
@@ -104,9 +165,16 @@ export async function sqlIgnore(statement: string): Promise<void> {
   }
 }
 
+function postgresQuery(statement: string, params: unknown[]) {
+  const text = bindPlaceholders(statement, true);
+  const client = sqlTransaction.getStore();
+  if (client) return client.query(text, params);
+  return withWake(() => postgresPool().query(text, params));
+}
+
 export async function sqlGet<T>(statement: string, params: unknown[] = []): Promise<T | undefined> {
   if (usesPostgres()) {
-    const result = await withWake(() => postgresPool().query(bindPlaceholders(statement, true), params));
+    const result = await postgresQuery(statement, params);
     return result.rows[0] as T | undefined;
   }
   return sqliteDb().prepare(statement).get(...(params as never[])) as T | undefined;
@@ -114,7 +182,7 @@ export async function sqlGet<T>(statement: string, params: unknown[] = []): Prom
 
 export async function sqlAll<T>(statement: string, params: unknown[] = []): Promise<T[]> {
   if (usesPostgres()) {
-    const result = await withWake(() => postgresPool().query(bindPlaceholders(statement, true), params));
+    const result = await postgresQuery(statement, params);
     return result.rows as T[];
   }
   return sqliteDb().prepare(statement).all(...(params as never[])) as T[];
@@ -122,7 +190,7 @@ export async function sqlAll<T>(statement: string, params: unknown[] = []): Prom
 
 export async function sqlRun(statement: string, params: unknown[] = []): Promise<void> {
   if (usesPostgres()) {
-    await withWake(() => postgresPool().query(bindPlaceholders(statement, true), params));
+    await postgresQuery(statement, params);
     return;
   }
   sqliteDb().prepare(statement).run(...(params as never[]));

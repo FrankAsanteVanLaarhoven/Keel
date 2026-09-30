@@ -254,7 +254,7 @@ export function deliverGraph(input: {
   datasets: DatasetVersion[];
   transforms: TransformDef[];
   runs: RecordedRun[];
-}): { status: "built" | "failed"; steps: BuildStep[]; produced: ProducedOutput[]; spark: string; flink: string } {
+}): { status: "built" | "current" | "failed"; steps: BuildStep[]; produced: ProducedOutput[]; spark: string; flink: string } {
   const outputNames = new Set(input.transforms.map((transform) => transform.outputName));
   const sources = input.datasets.filter((dataset) => !outputNames.has(dataset.name));
   const order = orderTransforms(input.transforms, sources.map((dataset) => dataset.name));
@@ -267,7 +267,7 @@ export function deliverGraph(input: {
   const stale = new Set(staleTransformIds(order, hashes, input.runs));
   const steps: BuildStep[] = [];
   const produced: ProducedOutput[] = [];
-  let status: "built" | "failed" = "built";
+  let status: "built" | "current" | "failed" = "built";
   for (const transform of order) {
     if (!stale.has(transform.id)) {
       steps.push({ transformId: transform.id, name: transform.name, status: "current" });
@@ -321,6 +321,7 @@ export function deliverGraph(input: {
       break;
     }
   }
+  if (status === "built" && steps.length > 0 && steps.every((step) => step.status === "current")) status = "current";
   return {
     status,
     steps,

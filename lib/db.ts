@@ -202,6 +202,11 @@ const sqliteSchema = `
       flink_plan TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS keel_pipe_dataset_branch ON keel_pipe_dataset (branch_id, name);
+    CREATE INDEX IF NOT EXISTS keel_pipe_transform_branch ON keel_pipe_transform (branch_id);
+    CREATE INDEX IF NOT EXISTS keel_pipe_object_branch ON keel_pipe_object (branch_id, name);
+    CREATE INDEX IF NOT EXISTS keel_pipe_run_branch ON keel_pipe_run (branch_id, transform_id);
+    CREATE INDEX IF NOT EXISTS keel_pipe_build_branch ON keel_pipe_build (branch_id, created_at);
 `;
 
 const postgresSchema = `
@@ -357,6 +362,11 @@ const postgresSchema = `
       flink_plan TEXT NOT NULL,
       created_at BIGINT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS keel_pipe_dataset_branch ON keel_pipe_dataset (branch_id, name);
+    CREATE INDEX IF NOT EXISTS keel_pipe_transform_branch ON keel_pipe_transform (branch_id);
+    CREATE INDEX IF NOT EXISTS keel_pipe_object_branch ON keel_pipe_object (branch_id, name);
+    CREATE INDEX IF NOT EXISTS keel_pipe_run_branch ON keel_pipe_run (branch_id, transform_id);
+    CREATE INDEX IF NOT EXISTS keel_pipe_build_branch ON keel_pipe_build (branch_id, created_at);
 `;
 
 export function ensureRecords(): Promise<void> {

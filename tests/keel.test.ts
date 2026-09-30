@@ -21,12 +21,14 @@ import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
 import { auth } from "../lib/auth";
 import { POST as resetPassphrase } from "../app/api/admin/passphrase/route";
-import { bindPlaceholders, isDatabaseWaking, sqlGet } from "../lib/sql";
+import { GET as healthGet } from "../app/api/health/route";
+import { GET as pipelineGet, POST as pipelinePost } from "../app/api/pipeline/route";
+import { bindPlaceholders, isDatabaseWaking, isUniqueViolation, sqlGet, sqlRun, usesPostgres, withTransaction } from "../lib/sql";
 import { matchAccept } from "../lib/locale";
 import { cacheControlFor, canResetPassphrase, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, passphraseAttemptLimit, passphraseOk, publicSignInLimit, publicSignUpLimit, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
-import { insertProfile, wipeUser } from "../lib/db";
+import { ensureRecords, insertProfile, wipeUser } from "../lib/db";
 import { addableClockIds, clockChoiceLabel, clockLimit, clockName, clockOptions, clockPlaces, clocksFromStorage, defaultClockIds, findClocks, localClockId } from "../lib/clocks";
-import { checkStatement, definitionOf, deliverGraph, ordersSample, parseDatasetFiles, PipelineError, type DatasetVersion, type TransformDef } from "../lib/pipeline";
+import { checkStatement, definitionOf, deliverGraph, ordersSample, parseDatasetFiles, PipelineError, recordsEngine, type DatasetVersion, type TransformDef } from "../lib/pipeline";
 import { markdownBlocks, markdownInlines } from "../lib/markdown";
 import { saveProgress, exportFor, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import {
@@ -863,6 +865,7 @@ describe("data pipeline", () => {
         definition: definitionOf(item.transformId === count.id ? count : transform),
       })),
     });
+    expect(second.status).toBe("current");
     expect(second.steps.map((step) => step.status)).toEqual(["current", "current"]);
     expect(second.produced).toHaveLength(0);
 
@@ -908,6 +911,142 @@ describe("data pipeline", () => {
       { name: "b.csv", text: "name\nAda\n" },
     ])).toThrow(PipelineError);
   });
+
+  it("keeps a delivery together, or rolls it back", async () => {
+    const owner = "pipe-rollback-owner";
+    const branchId = "pipe-rollback-branch";
+    await ensureRecords();
+    try {
+      await expect(withTransaction(async () => {
+        await sqlRun(
+          `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, 'main', NULL, ?)`,
+          [branchId, owner, Date.now()],
+        );
+        throw new Error("stop the delivery");
+      })).rejects.toThrow(/stop the delivery/);
+      expect(await sqlGet<{ id: string }>(`SELECT id FROM keel_pipe_branch WHERE id = ?`, [branchId])).toBeUndefined();
+      await sqlRun(
+        `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, 'main', NULL, ?)`,
+        [branchId, owner, Date.now()],
+      );
+      let unique = false;
+      try {
+        await sqlRun(
+          `INSERT INTO keel_pipe_branch (id, owner_id, name, base_id, created_at) VALUES (?, ?, 'main', NULL, ?)`,
+          ["pipe-rollback-other", owner, Date.now()],
+        );
+      } catch (error) {
+        unique = isUniqueViolation(error);
+      }
+      expect(unique).toBe(true);
+      if (!usesPostgres()) {
+        const index = await sqlGet<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'keel_pipe_build_branch'`);
+        expect(index?.name).toBe("keel_pipe_build_branch");
+      }
+    } finally {
+      await sqlRun(`DELETE FROM keel_pipe_branch WHERE owner_id = ?`, [owner]);
+    }
+  });
+
+  it("delivers a signed-in pipeline and keeps it on that account", async () => {
+    const firstEmail = "keel-pipeline-one@example.com";
+    const secondEmail = "keel-pipeline-two@example.com";
+    const password = "classroom-pipeline-1";
+    const health = await healthGet();
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ ok: true });
+    const locked = await pipelineGet(new Request("http://127.0.0.1:3960/api/pipeline"));
+    expect(locked.status).toBe(401);
+    const ids: string[] = [];
+    const cookieFor = async (email: string) => {
+      const response = await auth.api.signInEmail({ body: { email, password }, asResponse: true });
+      expect(response.ok).toBe(true);
+      return response.headers.getSetCookie().map((item) => item.split(";")[0]).join("; ");
+    };
+    const call = (cookie: string, method: "GET" | "POST", body?: unknown, branch = "") => {
+      const request = new Request(`http://127.0.0.1:3960/api/pipeline${branch}`, {
+        method,
+        headers: {
+          origin: "http://127.0.0.1:3960",
+          host: "127.0.0.1:3960",
+          "content-type": "application/json",
+          cookie,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      return method === "GET" ? pipelineGet(request) : pipelinePost(request);
+    };
+    try {
+      const ctx = await auth.$context;
+      for (const email of [firstEmail, secondEmail]) {
+        const existing = await ctx.internalAdapter.findUserByEmail(email);
+        if (!existing?.user?.id) continue;
+        await wipeUser(existing.user.id);
+        await ctx.internalAdapter.deleteUser(existing.user.id);
+      }
+      const first = await auth.api.signUpEmail({ body: { name: "Pipeline One", email: firstEmail, password } });
+      const second = await auth.api.signUpEmail({ body: { name: "Pipeline Two", email: secondEmail, password } });
+      ids.push(first.user.id, second.user.id);
+      const cookie = await cookieFor(firstEmail);
+      const other = await cookieFor(secondEmail);
+      const sample = await call(cookie, "POST", { action: "sample" });
+      expect(sample.status).toBe(200);
+      const opened = await sample.json() as { datasets: { name: string }[] };
+      expect(opened.datasets.map((dataset) => dataset.name).sort()).toEqual(["orders", "status"]);
+      const again = await call(cookie, "POST", { action: "sample" });
+      expect(again.status).toBe(400);
+      expect(await again.json()).toEqual({ error: "name" });
+      const delivered = await call(cookie, "POST", { action: "deliver" });
+      expect(delivered.status).toBe(200);
+      const built = await delivered.json() as {
+        datasets: { name: string; version: number }[];
+        build: { status: string; engine: string; steps: { status: string }[]; spark: string; flink: string };
+      };
+      expect(built.build.engine).toBe(recordsEngine);
+      expect(built.build.status).toBe("built");
+      expect(built.datasets.find((dataset) => dataset.name === "order_status")?.version).toBe(1);
+      expect(built.build.spark).toContain("until a Spark worker is connected");
+      expect(built.build.spark).toContain("dataset/orders/v1");
+      expect(built.build.flink).toContain("when a Flink worker is connected");
+      expect(built.build.flink).toContain("'connector' = 'filesystem'");
+      const repeat = await call(cookie, "POST", { action: "deliver" });
+      expect(repeat.status).toBe(200);
+      const current = await repeat.json() as { datasets: { name: string; version: number }[]; build: { status: string; engine: string; steps: { status: string }[] } };
+      expect(current.build.status).toBe("current");
+      expect(current.build.engine).toBe(recordsEngine);
+      expect(current.build.steps.every((step) => step.status === "current")).toBe(true);
+      expect(current.datasets.find((dataset) => dataset.name === "order_status")?.version).toBe(1);
+      const branched = await call(cookie, "POST", { action: "branch", name: "review", from: "main" });
+      expect(branched.status).toBe(200);
+      const duplicate = await call(cookie, "POST", { action: "branch", name: "review", from: "main" });
+      expect(duplicate.status).toBe(400);
+      expect(await duplicate.json()).toEqual({ error: "name" });
+      const fallback = await call(cookie, "GET", undefined, "?branch=review");
+      expect(fallback.status).toBe(200);
+      const child = await fallback.json() as { datasets: { name: string }[] };
+      expect(child.datasets.map((dataset) => dataset.name)).toContain("orders");
+      const hidden = await call(other, "GET");
+      expect(hidden.status).toBe(200);
+      const theirs = await hidden.json() as { datasets: { name: string }[] };
+      expect(theirs.datasets.map((dataset) => dataset.name)).not.toContain("orders");
+      const exported = await exportFor(first.user.id);
+      expect(exported.pipeline.datasets.length).toBeGreaterThan(0);
+      expect(exported.pipeline.datasets.some((dataset) => (dataset as { name: string }).name === "orders")).toBe(true);
+      await wipeUser(first.user.id);
+      const removed = await exportFor(first.user.id);
+      expect(removed.pipeline.datasets).toEqual([]);
+      expect(removed.pipeline.branches).toEqual([]);
+    } finally {
+      const ctx = await auth.$context;
+      for (const email of [firstEmail, secondEmail]) {
+        const existing = await ctx.internalAdapter.findUserByEmail(email);
+        if (!existing?.user?.id) continue;
+        await wipeUser(existing.user.id);
+        await ctx.internalAdapter.deleteUser(existing.user.id);
+      }
+      for (const id of ids) await wipeUser(id);
+    }
+  }, 30_000);
 });
 
 
