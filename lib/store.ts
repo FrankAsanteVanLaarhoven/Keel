@@ -155,5 +155,7 @@ export async function exportFor(userId: string) {
   const progress = await sqlAll(`SELECT item_id, kind, score, xp, detail, day, updated_at FROM keel_progress WHERE user_id = ?`, [userId]);
   const likes = await sqlAll(`SELECT section_id, created_at FROM keel_like WHERE user_id = ?`, [userId]);
   const consent = await getConsent(userId);
-  return { profile: profile ?? null, progress, likes, voiceConsent: consent };
+  const { workshopExport } = await import("./workshop");
+  const workshop = await workshopExport(userId);
+  return { profile: profile ?? null, progress, likes, voiceConsent: consent, workshop };
 }

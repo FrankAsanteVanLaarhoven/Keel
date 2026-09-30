@@ -1,5 +1,6 @@
 import { takeToken } from "./rate";
 import { clientBucket, readJson, sameOrigin } from "./security";
+import { isDatabaseWaking } from "./sql";
 
 export function json(data: unknown, status = 200, headers?: Record<string, string>) {
   return new Response(JSON.stringify(data), {
@@ -14,12 +15,12 @@ export function json(data: unknown, status = 200, headers?: Record<string, strin
   });
 }
 
-export async function guard(request: Request, bucket: string, limit: number, windowMs: number, userId?: string) {
+export async function guard(request: Request, bucket: string, limit: number, windowMs: number, userId?: string, max = 20_000) {
   if (!sameOrigin(request)) return { error: json({ error: "origin" }, 403), body: null as unknown };
   let body: unknown = {};
   if (request.method !== "GET") {
     try {
-      body = await readJson(request);
+      body = await readJson(request, max);
     } catch {
       return { error: json({ error: "body" }, 400), body: null as unknown };
     }
@@ -32,4 +33,13 @@ export async function guard(request: Request, bucket: string, limit: number, win
     };
   }
   return { error: null, body };
+}
+
+export async function settle(run: () => Promise<Response>): Promise<Response> {
+  try {
+    return await run();
+  } catch (error) {
+    if (isDatabaseWaking(error)) return json({ error: "waking" }, 503);
+    return json({ error: "unavailable" }, 500);
+  }
 }

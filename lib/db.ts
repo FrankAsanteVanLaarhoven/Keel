@@ -96,6 +96,43 @@ const sqliteSchema = `
     CREATE INDEX IF NOT EXISTS session_userId ON session(userId);
     CREATE INDEX IF NOT EXISTS account_userId ON account(userId);
     CREATE INDEX IF NOT EXISTS verification_identifier ON verification(identifier);
+    CREATE TABLE IF NOT EXISTS keel_page (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      updated_by TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_member (
+      page_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      PRIMARY KEY (page_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_revision (
+      page_id TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (page_id, revision)
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_note (
+      id TEXT PRIMARY KEY,
+      page_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_seen (
+      page_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (page_id, user_id)
+    );
 `;
 
 const postgresSchema = `
@@ -145,6 +182,43 @@ const postgresSchema = `
     CREATE INDEX IF NOT EXISTS keel_progress_user ON keel_progress(user_id);
     CREATE INDEX IF NOT EXISTS keel_like_section ON keel_like(section_id);
     CREATE INDEX IF NOT EXISTS keel_analytics_event ON keel_analytics(event_type);
+    CREATE TABLE IF NOT EXISTS keel_page (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      updated_at BIGINT NOT NULL,
+      updated_by TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_member (
+      page_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      PRIMARY KEY (page_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_revision (
+      page_id TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      PRIMARY KEY (page_id, revision)
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_note (
+      id TEXT PRIMARY KEY,
+      page_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_page_seen (
+      page_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      seen_at BIGINT NOT NULL,
+      PRIMARY KEY (page_id, user_id)
+    );
 `;
 
 export function ensureRecords(): Promise<void> {
@@ -181,6 +255,18 @@ export async function wipeUser(userId: string) {
   await sqlRun(`DELETE FROM keel_like WHERE user_id = ?`, [userId]);
   await sqlRun(`DELETE FROM keel_consent WHERE user_id = ?`, [userId]);
   await sqlRun(`DELETE FROM keel_rate WHERE bucket LIKE ?`, [`user:${safe}:%`]);
+  const owned = await sqlAll<{ id: string }>(`SELECT id FROM keel_page WHERE owner_id = ?`, [userId]);
+  for (const page of owned) {
+    await sqlRun(`DELETE FROM keel_page_revision WHERE page_id = ?`, [page.id]);
+    await sqlRun(`DELETE FROM keel_page_member WHERE page_id = ?`, [page.id]);
+    await sqlRun(`DELETE FROM keel_page_note WHERE page_id = ?`, [page.id]);
+    await sqlRun(`DELETE FROM keel_page_seen WHERE page_id = ?`, [page.id]);
+    await sqlRun(`DELETE FROM keel_page WHERE id = ?`, [page.id]);
+  }
+  await sqlRun(`DELETE FROM keel_page_member WHERE user_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_page_note WHERE author_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_page_seen WHERE user_id = ?`, [userId]);
+  await sqlRun(`UPDATE keel_page SET updated_by = owner_id WHERE updated_by = ?`, [userId]);
   try {
     const reviews = await sqlAll<{ id: string }>(`SELECT id FROM keel_review WHERE user_id = ?`, [userId]);
     for (const review of reviews) await sqlRun(`DELETE FROM keel_fingerprint WHERE review_id = ?`, [review.id]);

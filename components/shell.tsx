@@ -90,6 +90,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
     ["/term", m.termNav],
     ["/ops", m.opsNav],
     ["/foundry", m.foundry],
+    ["/workshop", m.workshop],
     ["/analytics", m.analytics],
     ["/standing", m.standing],
     ["/dossier", m.dossier],

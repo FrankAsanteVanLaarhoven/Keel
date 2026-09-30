@@ -25,7 +25,19 @@ import { bindPlaceholders, isDatabaseWaking, sqlGet } from "../lib/sql";
 import { matchAccept } from "../lib/locale";
 import { cacheControlFor, canResetPassphrase, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, passphraseAttemptLimit, passphraseOk, publicSignInLimit, publicSignUpLimit, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
-import { saveProgress, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
+import { markdownBlocks, markdownInlines } from "../lib/markdown";
+import { saveProgress, exportFor, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
+import {
+  addWorkshopMember,
+  addWorkshopNote,
+  createWorkshopPage,
+  deleteWorkshopPage,
+  readWorkshopPage,
+  restoreWorkshopRevision,
+  saveWorkshopPage,
+  setWorkshopStatus,
+  workshopAccess,
+} from "../lib/workshop";
 import { localReply } from "../lib/tutor";
 import { ephemeralToken, responseText, takeVoiceEvent } from "../lib/voice-events";
 import { aiReply, hasTts, hasVoiceSession, liveEnabled, openrouterReply } from "../lib/server/live";
@@ -633,7 +645,95 @@ describe("super admin & teacher evaluation ledger", () => {
     expect(updated?.verified).toBe(1);
     expect(updated?.teacherFeedback).toContain("Solid reasoning");
   });
+});
 
+describe("workshop", () => {
+  it("renders safe markdown and keeps a draft private until it is published", () => {
+    const blocks = markdownBlocks("# Title\n\n- one\n- two\n\n```\nalert(1)\n```\n\n<script>alert(1)</script>");
+    expect(blocks.find((block) => block.type === "h")).toMatchObject({ level: 1, text: "Title" });
+    expect(blocks.find((block) => block.type === "ul")).toMatchObject({ items: ["one", "two"] });
+    expect(blocks.find((block) => block.type === "code")).toMatchObject({ text: "alert(1)" });
+    expect(blocks.find((block) => block.type === "p")).toMatchObject({ text: "<script>alert(1)</script>" });
+    const inlines = markdownInlines("See [x](javascript:alert(1)) and [ok](https://example.com).");
+    expect(inlines.some((part) => part.type === "link" && part.href.startsWith("javascript:"))).toBe(false);
+    expect(inlines).toContainEqual({ type: "link", text: "ok", href: "https://example.com" });
+    expect(workshopAccess({ actorId: null, staff: true, ownerId: "a", memberIds: [], status: "published" })).toBe("none");
+    expect(workshopAccess({ actorId: "a", staff: false, ownerId: "a", memberIds: [], status: "draft" })).toBe("edit");
+    expect(workshopAccess({ actorId: "b", staff: false, ownerId: "a", memberIds: ["b"], status: "draft" })).toBe("edit");
+    expect(workshopAccess({ actorId: "c", staff: true, ownerId: "a", memberIds: [], status: "draft" })).toBe("read");
+    expect(workshopAccess({ actorId: "c", staff: false, ownerId: "a", memberIds: [], status: "published" })).toBe("read");
+    expect(workshopAccess({ actorId: "c", staff: false, ownerId: "a", memberIds: [], status: "draft" })).toBe("none");
+  });
+
+  it("keeps every save, stops a stale write, and removes the page with the owner", async () => {
+    const owner = "workshop-owner-test";
+    const mate = "workshop-mate-test";
+    const stranger = "workshop-stranger-test";
+    const staff = "workshop-staff-test";
+    const twinA = "workshop-twin-a";
+    const twinB = "workshop-twin-b";
+    const ids = [owner, mate, stranger, staff, twinA, twinB];
+    let pageId = "";
+    try {
+      for (const id of ids) await wipeUser(id);
+      await insertProfile(owner, "Workshop Owner");
+      await insertProfile(mate, "Workshop Mate");
+      await insertProfile(stranger, "Workshop Stranger");
+      await insertProfile(staff, "Workshop Staff", "staff");
+      await insertProfile(twinA, "Twin Name");
+      await insertProfile(twinB, "Twin Name");
+      const created = await createWorkshopPage(owner, "Harbor desk");
+      pageId = created.id;
+      const first = await readWorkshopPage(owner, false, created.id);
+      expect(first.error).toBeNull();
+      if (first.error) return;
+      expect(first.page.body).toContain("What we are building");
+      expect(first.manage).toBe(true);
+      const saved = await saveWorkshopPage(owner, false, created.id, "Harbor desk", "We decided on one door.", 1);
+      expect(saved.ok).toBe(true);
+      const stale = await saveWorkshopPage(owner, false, created.id, "Harbor desk", "late", 1);
+      expect(stale.ok).toBe(false);
+      if (!stale.ok) expect(stale.error).toBe("conflict");
+      expect((await readWorkshopPage(stranger, false, created.id)).error).toBe("forbidden");
+      const staffRead = await readWorkshopPage(staff, true, created.id);
+      expect(staffRead.error).toBeNull();
+      if (!staffRead.error) expect(staffRead.manage).toBe(true);
+      expect((await addWorkshopMember(owner, false, created.id, "Nobody Here")).ok).toBe(false);
+      expect((await addWorkshopMember(owner, false, created.id, "Twin Name")).ok).toBe(false);
+      const ambiguous = await addWorkshopMember(owner, false, created.id, "Twin Name");
+      expect(ambiguous.ok).toBe(false);
+      if (!ambiguous.ok) expect(ambiguous.error).toBe("ambiguous");
+      expect((await addWorkshopMember(owner, false, created.id, "Workshop Mate")).ok).toBe(true);
+      expect((await addWorkshopNote(stranger, false, created.id, "I can see this")).ok).toBe(false);
+      expect((await addWorkshopNote(mate, false, created.id, "Check the door.")).ok).toBe(true);
+      expect((await saveWorkshopPage(mate, false, created.id, "Harbor desk", "Mate wrote this.", 2)).ok).toBe(true);
+      expect((await setWorkshopStatus(mate, false, created.id, "published")).ok).toBe(false);
+      expect((await deleteWorkshopPage(mate, false, created.id)).ok).toBe(false);
+      expect((await setWorkshopStatus(owner, false, created.id, "published")).ok).toBe(true);
+      const publicRead = await readWorkshopPage(stranger, false, created.id);
+      expect(publicRead.error).toBeNull();
+      if (!publicRead.error) expect(publicRead.page.access).toBe("read");
+      expect((await addWorkshopNote(stranger, false, created.id, "Still outside")).ok).toBe(false);
+      expect((await setWorkshopStatus(staff, true, created.id, "draft")).ok).toBe(true);
+      expect((await readWorkshopPage(stranger, false, created.id)).error).toBe("forbidden");
+      const restored = await restoreWorkshopRevision(owner, false, created.id, 1);
+      expect(restored.ok).toBe(true);
+      const after = await readWorkshopPage(owner, false, created.id);
+      expect(after.error).toBeNull();
+      if (!after.error) expect(after.page.body).toContain("What we are building");
+      const exported = await exportFor(owner);
+      expect(exported.workshop.some((page) => page.title === "Harbor desk")).toBe(true);
+      await wipeUser(owner);
+      expect((await readWorkshopPage(staff, true, created.id)).error).toBe("missing");
+      pageId = "";
+    } finally {
+      if (pageId) await deleteWorkshopPage(owner, true, pageId);
+      for (const id of ids) await wipeUser(id);
+    }
+  });
+});
+
+describe("solutions", () => {
   it("verifies architectural master key and solutions breakdown data integrity", async () => {
     const { harborTierSolutions, harborDecisionsBreakdown, caseSolutionsList, foundryMissionSolutions } = await import(
       "../lib/solutions"
