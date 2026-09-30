@@ -133,6 +133,75 @@ const sqliteSchema = `
       seen_at INTEGER NOT NULL,
       PRIMARY KEY (page_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS keel_pipe_branch (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      base_id TEXT,
+      created_at INTEGER NOT NULL,
+      UNIQUE (owner_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_dataset (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      files_json TEXT NOT NULL,
+      columns_json TEXT NOT NULL,
+      rows_json TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      build_id TEXT,
+      created_at INTEGER NOT NULL,
+      UNIQUE (branch_id, name, version)
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_transform (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      inputs_json TEXT NOT NULL,
+      statement TEXT NOT NULL,
+      output_name TEXT NOT NULL,
+      output_kind TEXT NOT NULL,
+      object_type TEXT NOT NULL,
+      grain TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_object (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      grain TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      columns_json TEXT NOT NULL,
+      rows_json TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (branch_id, name, version)
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_run (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      transform_id TEXT NOT NULL,
+      input_hashes_json TEXT NOT NULL,
+      output_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_build (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      engine TEXT NOT NULL,
+      steps_json TEXT NOT NULL,
+      spark_plan TEXT NOT NULL,
+      flink_plan TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
 `;
 
 const postgresSchema = `
@@ -219,6 +288,75 @@ const postgresSchema = `
       seen_at BIGINT NOT NULL,
       PRIMARY KEY (page_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS keel_pipe_branch (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      base_id TEXT,
+      created_at BIGINT NOT NULL,
+      UNIQUE (owner_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_dataset (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      files_json TEXT NOT NULL,
+      columns_json TEXT NOT NULL,
+      rows_json TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      build_id TEXT,
+      created_at BIGINT NOT NULL,
+      UNIQUE (branch_id, name, version)
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_transform (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      inputs_json TEXT NOT NULL,
+      statement TEXT NOT NULL,
+      output_name TEXT NOT NULL,
+      output_kind TEXT NOT NULL,
+      object_type TEXT NOT NULL,
+      grain TEXT NOT NULL,
+      updated_at BIGINT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_object (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      grain TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      columns_json TEXT NOT NULL,
+      rows_json TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      UNIQUE (branch_id, name, version)
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_run (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      transform_id TEXT NOT NULL,
+      input_hashes_json TEXT NOT NULL,
+      output_hash TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS keel_pipe_build (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      engine TEXT NOT NULL,
+      steps_json TEXT NOT NULL,
+      spark_plan TEXT NOT NULL,
+      flink_plan TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    );
 `;
 
 export function ensureRecords(): Promise<void> {
@@ -267,6 +405,12 @@ export async function wipeUser(userId: string) {
   await sqlRun(`DELETE FROM keel_page_note WHERE author_id = ?`, [userId]);
   await sqlRun(`DELETE FROM keel_page_seen WHERE user_id = ?`, [userId]);
   await sqlRun(`UPDATE keel_page SET updated_by = owner_id WHERE updated_by = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_pipe_run WHERE owner_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_pipe_build WHERE owner_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_pipe_object WHERE owner_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_pipe_dataset WHERE owner_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_pipe_transform WHERE owner_id = ?`, [userId]);
+  await sqlRun(`DELETE FROM keel_pipe_branch WHERE owner_id = ?`, [userId]);
   try {
     const reviews = await sqlAll<{ id: string }>(`SELECT id FROM keel_review WHERE user_id = ?`, [userId]);
     for (const review of reviews) await sqlRun(`DELETE FROM keel_fingerprint WHERE review_id = ?`, [review.id]);

@@ -26,6 +26,7 @@ import { matchAccept } from "../lib/locale";
 import { cacheControlFor, canResetPassphrase, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, passphraseAttemptLimit, passphraseOk, publicSignInLimit, publicSignUpLimit, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
 import { addableClockIds, clockChoiceLabel, clockLimit, clockName, clockOptions, clockPlaces, clocksFromStorage, defaultClockIds, findClocks, localClockId } from "../lib/clocks";
+import { checkStatement, definitionOf, deliverGraph, ordersSample, parseDatasetFiles, PipelineError, type DatasetVersion, type TransformDef } from "../lib/pipeline";
 import { markdownBlocks, markdownInlines } from "../lib/markdown";
 import { saveProgress, exportFor, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import {
@@ -807,6 +808,105 @@ describe("world clock", () => {
       expect(name && name !== place.region).toBe(true);
     }
     expect(zones.has(localClockId)).toBe(false);
+  });
+});
+
+describe("data pipeline", () => {
+  it("builds datasets in order, keeps the lineage, and compiles both jobs", () => {
+    const sample = ordersSample();
+    const datasets: DatasetVersion[] = sample.datasets.map((dataset) => {
+      const parsed = parseDatasetFiles(dataset.files);
+      return { name: dataset.name, version: 1, files: dataset.files, columns: parsed.columns, rows: parsed.rows, hash: parsed.hash };
+    });
+    const transform: TransformDef = { id: "status", ...sample.transform };
+    const count: TransformDef = {
+      id: "count",
+      name: "Count",
+      inputs: ["order_status"],
+      statement: "SELECT count(*) AS orders FROM order_status",
+      outputName: "order_count",
+      outputKind: "dataset",
+      objectType: "",
+      grain: "",
+    };
+    const first = deliverGraph({ datasets, transforms: [transform, count], runs: [] });
+    expect(first.status).toBe("built");
+    expect(first.steps.map((step) => step.status)).toEqual(["built", "built"]);
+    expect(first.produced[0].rows).toEqual([
+      { order_id: 1001, status_label: "Open", amount: 20 },
+      { order_id: 1002, status_label: "Paid", amount: 15 },
+    ]);
+    expect(first.produced[1].rows).toEqual([{ orders: 2 }]);
+    expect(first.spark).toContain("Spark batch job");
+    expect(first.spark).toContain("dataset/orders/v1");
+    expect(first.spark).toContain(sample.transform.statement);
+    expect(first.flink).toContain("'connector' = 'filesystem'");
+    expect(first.flink).toContain("INSERT INTO order_status");
+
+    const kept: DatasetVersion[] = [
+      ...datasets,
+      ...first.produced.filter((item) => item.kind === "dataset").map((item) => ({
+        name: item.name,
+        version: 1,
+        files: item.files,
+        columns: item.columns,
+        rows: item.rows,
+        hash: item.hash,
+      })),
+    ];
+    const second = deliverGraph({
+      datasets: kept,
+      transforms: [transform, count],
+      runs: first.produced.map((item) => ({
+        transformId: item.transformId,
+        inputHashes: item.inputHashes,
+        definition: definitionOf(item.transformId === count.id ? count : transform),
+      })),
+    });
+    expect(second.steps.map((step) => step.status)).toEqual(["current", "current"]);
+    expect(second.produced).toHaveLength(0);
+
+    const changed = parseDatasetFiles([{ name: "orders.csv", text: "order_id,status,amount\n1001,open,40\n" }]);
+    const third = deliverGraph({
+      datasets: [{ ...datasets[0], version: 2, files: [{ name: "orders.csv", text: "order_id,status,amount\n1001,open,40\n" }], ...changed }, datasets[1]],
+      transforms: [transform, count],
+      runs: first.produced.map((item) => ({
+        transformId: item.transformId,
+        inputHashes: item.inputHashes,
+        definition: definitionOf(item.transformId === count.id ? count : transform),
+      })),
+    });
+    expect(third.steps.map((step) => step.status)).toEqual(["built", "built"]);
+    expect(third.produced[0].rows[0].amount).toBe(40);
+
+    const objectBuild = deliverGraph({
+      datasets,
+      transforms: [{ ...transform, outputName: "order", outputKind: "object", objectType: "order", grain: "order_id" }],
+      runs: [],
+    });
+    expect(objectBuild.produced[0].kind).toBe("object");
+    const missingGrain = deliverGraph({
+      datasets,
+      transforms: [{ ...transform, outputName: "order", outputKind: "object", objectType: "order", grain: "missing" }],
+      runs: [],
+    });
+    expect(missingGrain.status).toBe("failed");
+    expect(missingGrain.steps[0].error).toBe("grain");
+
+    expect(() => checkStatement("DELETE FROM orders")).toThrow(PipelineError);
+    expect(() => checkStatement("SELECT 1; SELECT 2")).toThrow(PipelineError);
+    expect(() => deliverGraph({
+      datasets: [],
+      transforms: [
+        { ...transform, id: "a", inputs: ["b_out"], outputName: "a_out" },
+        { ...transform, id: "b", inputs: ["a_out"], outputName: "b_out" },
+      ],
+      runs: [],
+    })).toThrow(PipelineError);
+    expect(() => parseDatasetFiles([
+      { name: "a.csv", text: "id\n1\n" },
+      { name: "b.csv", text: "name\nAda\n" },
+    ])).toThrow(PipelineError);
   });
 });
 

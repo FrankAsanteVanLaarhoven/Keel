@@ -108,6 +108,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
     ["/term", m.termNav],
     ["/ops", m.opsNav],
     ["/foundry", m.foundry],
+    ["/foundry/pipeline", m.pipeline],
     ["/workshop", m.workshop],
     ["/analytics", m.analytics],
     ["/standing", m.standing],
@@ -129,7 +130,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
           </Link>
           <nav className="hidden items-center gap-4 md:flex" aria-label={m.menu}>
             {links.map(([href, label]) => (
-              <Link key={href} href={href} className={navCurrent(pathname, href) ? "border-b border-copper text-sm" : "text-sm text-soft"}>
+              <Link key={href} href={href} className={navCurrent(pathname, href, links.map(([item]) => item)) ? "border-b border-copper text-sm" : "text-sm text-soft"}>
                 {label}
               </Link>
             ))}
@@ -179,7 +180,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
         </div>
         <nav className="flex gap-4 overflow-x-auto px-4 pb-3 md:hidden" aria-label={m.menu}>
           {links.map(([href, label]) => (
-            <Link key={href} href={href} className={navCurrent(pathname, href) ? "border-b border-copper text-sm whitespace-nowrap" : "text-sm whitespace-nowrap text-soft"}>
+            <Link key={href} href={href} className={navCurrent(pathname, href, links.map(([item]) => item)) ? "border-b border-copper text-sm whitespace-nowrap" : "text-sm whitespace-nowrap text-soft"}>
               {label}
             </Link>
           ))}
@@ -224,9 +225,11 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
   );
 }
 
-function navCurrent(pathname: string, href: string): boolean {
+function navCurrent(pathname: string, href: string, hrefs: readonly string[]): boolean {
   if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const matched = hrefs.filter((item) => item !== "/" && (pathname === item || pathname.startsWith(`${item}/`)));
+  if (!matched.includes(href)) return false;
+  return href.length === Math.max(...matched.map((item) => item.length));
 }
 
 function subscribeConsent(listener: () => void) {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Messages } from "@/lib/i18n/en";
 import { useKeel } from "./keel-context";
@@ -1199,6 +1200,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             <p className="mt-1 text-sm text-soft">
               Interactive 2D/3D visual architecture simulator with live directional dataflow, entity relations, full CRUD, and an AI Architect Tutor.
             </p>
+            <p className="mt-2"><Link className="text-sm underline" href="/foundry/pipeline">{m.pipeline}</Link></p>
           </div>
 
           <div className="flex items-center gap-3">

@@ -157,5 +157,7 @@ export async function exportFor(userId: string) {
   const consent = await getConsent(userId);
   const { workshopExport } = await import("./workshop");
   const workshop = await workshopExport(userId);
-  return { profile: profile ?? null, progress, likes, voiceConsent: consent, workshop };
+  const { pipelineExport } = await import("./pipeline-store");
+  const pipeline = await pipelineExport(userId);
+  return { profile: profile ?? null, progress, likes, voiceConsent: consent, workshop, pipeline };
 }
