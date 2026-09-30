@@ -25,6 +25,7 @@ import { bindPlaceholders, isDatabaseWaking, sqlGet } from "../lib/sql";
 import { matchAccept } from "../lib/locale";
 import { cacheControlFor, canResetPassphrase, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, passphraseAttemptLimit, passphraseOk, publicSignInLimit, publicSignUpLimit, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
+import { clockLimit, clockName, clockPlaces, clocksFromStorage, defaultClockIds, findClocks, localClockId } from "../lib/clocks";
 import { markdownBlocks, markdownInlines } from "../lib/markdown";
 import { saveProgress, exportFor, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import {
@@ -757,6 +758,39 @@ describe("solutions", () => {
         expect(d.optimalChoice).toBe(expected[d.questionId]);
       }
     }
+  });
+});
+
+describe("world clock", () => {
+  it("keeps a removable list on this device and matches a typed country", () => {
+    expect(defaultClockIds).toEqual(["local", "Europe/London", "America/New_York", "Africa/Lagos", "Asia/Tokyo"]);
+    expect(clocksFromStorage(null)).toEqual([...defaultClockIds]);
+    expect(clocksFromStorage("[]")).toEqual([]);
+    expect(clocksFromStorage("not-json")).toEqual([...defaultClockIds]);
+    expect(clocksFromStorage("[\"nope\", \"Africa/Accra\", \"Africa/Accra\", \"local\"]")).toEqual(["Africa/Accra", "local"]);
+    const nine = ["local", "Europe/London", "America/New_York", "Africa/Lagos", "Asia/Tokyo", "Africa/Accra", "Europe/Paris", "Asia/Shanghai", "Europe/Berlin"];
+    expect(clocksFromStorage(JSON.stringify(nine))).toHaveLength(clockLimit);
+    expect(findClocks("Ghana", "en")).toEqual(["Africa/Accra"]);
+    expect(findClocks("Accra", "en")).toEqual(["Africa/Accra"]);
+    expect(findClocks("Alemania", "es")).toEqual(["Europe/Berlin"]);
+    expect(findClocks("日本", "ja")).toEqual(["Asia/Tokyo"]);
+    expect(findClocks("guinea", "en").length).toBeGreaterThan(1);
+    const states = findClocks("united states", "en");
+    expect(states.length).toBeGreaterThan(1);
+    expect(states).toContain("America/New_York");
+    expect(findClocks("no such country", "en")).toEqual([]);
+    expect(clockName("Africa/Accra", "en")).toBe("Ghana");
+    expect(clockName("America/Chicago", "en")).toBe("United States (Chicago)");
+    const zones = new Set<string>();
+    for (const place of clockPlaces) {
+      expect(place.region).toMatch(/^[A-Z]{2}$/);
+      expect(zones.has(place.zone)).toBe(false);
+      zones.add(place.zone);
+      expect(new Intl.DateTimeFormat("en", { timeZone: place.zone, hour: "2-digit" }).format(new Date("2026-01-15T12:00:00Z"))).toMatch(/\d/);
+      const name = new Intl.DisplayNames(["en"], { type: "region" }).of(place.region);
+      expect(name && name !== place.region).toBe(true);
+    }
+    expect(zones.has(localClockId)).toBe(false);
   });
 });
 
