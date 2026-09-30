@@ -519,7 +519,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setSelectedNodeId(null);
     setSelectedConnId(null);
     setConnectFromId(null);
-    setToast({ message: `Loaded Enterprise Template: ${t.name}`, type: "success" });
+    setToast({ message: t.name, type: "success" });
   };
 
   // Tidy / Auto-Layout Architecture Tool (Places nodes into neat, non-overlapping enterprise tiers)
@@ -562,7 +562,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     });
 
     setNodes(updated);
-    setToast({ message: "Auto-Layout complete: Aligned into clean enterprise architectural tiers.", type: "success" });
+    setToast({ message: "The parts are lined up.", type: "success" });
   };
 
   // Live Heuristic & AI Diagnostic Engine
@@ -582,66 +582,58 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     const isHeavyLoad = trafficMultiplier >= 2;
 
     let status: "verified" | "flawed" | "warning" = "verified";
-    let statusText = "Enterprise Architecture Verified: Production Ready";
-    let whatIsWrong = "No critical design flaws detected. Your dataflow adheres to enterprise separation of concerns.";
-    let whyItMatters = "Strict tiering shields private data, protects against single-node crashes, and scales under heavy concurrency.";
-    let stepByStep: string[] = [
-      "Simulate high traffic with the 'Traffic Surge' button to test latency.",
-      "Trigger 'Fault Injection' to evaluate failover resiliency under node outage.",
-      "Add a Telemetry & SRE Agent to monitor real-time MTTR and latency.",
-    ];
+    let statusText = "The drawing holds.";
+    let whatIsWrong = "The person, the decision, and the record stay apart.";
+    let whyItMatters = "A person reaches the record only through the part that decides.";
+    let stepByStep: string[] = [];
     let canAutoFix = false;
 
     if (hasDirectDb) {
       status = "flawed";
-      statusText = "Critical Security Flaw: Direct Database Exposure";
-      whatIsWrong = "The Client browser is directly wired to the Authoritative Database without passing through an API or security boundary.";
-      whyItMatters = "Any individual with a web browser can open Developer Tools, view database credentials, and steal or corrupt customer records. The database can also be knocked offline instantly with simple SQL queries.";
+      statusText = "The person reaches the record directly.";
+      whatIsWrong = "The client is connected to the database. Nothing between them checks who the person is or what they may do.";
+      whyItMatters = "Anyone who can open the page can read and change the records.";
       stepByStep = [
-        "Select the red wire connecting Client to Database and cut it.",
-        "Add an 'Auth & Security Guard' (or API Gateway) and an 'App Logic Tier' from the Toolbox.",
-        "Wire Client -> Auth Guard -> App Logic Tier -> Database.",
+        "Remove the line from the client to the database.",
+        "Put a check and the application between them.",
+        "Connect the client to the check, the check to the application, and the application to the database.",
       ];
       canAutoFix = true;
     } else if (!hasCompute && nodes.length >= 2) {
       status = "flawed";
-      statusText = "Architectural Violation: Missing Application Logic Tier";
-      whatIsWrong = "You have storage and user touchpoints, but nowhere for business calculations, access validation, or data sanitization to execute.";
-      whyItMatters = "The 'Three Rooms' principle states business rules must reside in a dedicated middle tier. Storing logic on clients leads to tampering; storing it in database triggers degrades performance.";
+      statusText = "The decision has nowhere to live.";
+      whatIsWrong = "The drawing has a person and a record, and no application between them.";
+      whyItMatters = "A rule that lives in the browser can be changed by the person using it.";
       stepByStep = [
-        "Click 'App Logic Tier' in the left Architecture Toolbox to spawn a compute pod.",
-        "Route your Gateway or Client into the App Logic Tier.",
-        "Route the App Logic Tier into the Database.",
+        "Add the application.",
+        "Connect the person to the application, and the application to the record.",
       ];
       canAutoFix = true;
     } else if (hasDown) {
       status = "flawed";
-      statusText = "Active Outage: Downstream Dependency Offline";
-      whatIsWrong = "One or more nodes in your critical path have crashed or been simulated offline by fault injection.";
-      whyItMatters = "When a downstream service crashes without a fallback replica or cache buffer, user requests timeout, resulting in failed checkouts and damaged trust.";
+      statusText = "A part of the drawing is down.";
+      whatIsWrong = "A part on the path is down, so the request stops there.";
+      whyItMatters = "The person gets no answer while that part is down.";
       stepByStep = [
-        "Select the downed node and change its Health Status to 'Healthy', or click 'Auto-Heal & Restore'.",
-        "Introduce a Distributed Cache or Message Queue to decouple asynchronous requests.",
+        "Mark that part healthy, or restore it.",
+        "Give the request another place to wait if that part fails.",
       ];
       canAutoFix = true;
     } else if (isolatedNodes.length > 0) {
       status = "warning";
-      statusText = "Orphaned Components: Unconnected Nodes";
-      whatIsWrong = `There are ${isolatedNodes.length} node(s) on the canvas (${isolatedNodes.map((n) => n.label).join(", ")}) that have no dataflow connections.`;
-      whyItMatters = "Idle, unconnected servers waste cloud budget and create confusion during architecture reviews.";
-      stepByStep = [
-        "Use the 'Connect Arrow' tool to integrate the isolated nodes into your dataflow pipeline.",
-        "Or select the unused nodes and click 'Delete Node'.",
-      ];
+      statusText = "A part is not connected.";
+      whatIsWrong = `${isolatedNodes.map((n) => n.label).join(", ")} ${isolatedNodes.length === 1 ? "has" : "have"} no line.`;
+      whyItMatters = "A part with no line does no work.";
+      stepByStep = ["Connect it, or remove it."];
       canAutoFix = false;
     } else if (isHeavyLoad && !hasCache) {
       status = "warning";
-      statusText = "Performance Bottleneck: Database Under Heavy Load";
-      whatIsWrong = "Traffic has surged, but every read query is hitting the primary disk database directly without an in-memory cache.";
-      whyItMatters = "Databases quickly run out of connection pools during surges, leading to escalating latency (>500ms) and inevitable 504 Gateway Timeouts.";
+      statusText = "The record is taking every read.";
+      whatIsWrong = "The load is high, and every read goes to the database.";
+      whyItMatters = "The database runs out of room for new requests, and the answer gets slow.";
       stepByStep = [
-        "Add a 'Distributed Cache' (Redis) from the toolbox.",
-        "Wire the App Logic Tier to the Cache to deliver sub-millisecond responses.",
+        "Add a cache beside the application.",
+        "Send repeated reads to the cache.",
       ];
       canAutoFix = true;
     }
@@ -2335,7 +2327,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   <span className="font-mono text-ink/80">{nodeTypeMeta[selectedNode.type].desc}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-bold text-ink">Enterprise Equivalent:</span>
+                  <span className="font-mono font-bold text-ink">Field name:</span>
                   <span className="font-mono font-bold text-copper">
                     {nodeTypeMeta[selectedNode.type].tool}
                   </span>
@@ -2353,8 +2345,8 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     <IconArchitect size={22} />
                   </span>
                   <div>
-                    <h3 className="text-sm font-bold text-ink">AI Architecture Tutor & Inspector</h3>
-                    <p className="text-xs text-soft">Continuous heuristic and LLM analysis: detects flaws, explains why, and provides step-by-step guidance.</p>
+                    <h3 className="text-sm font-bold text-ink">Review</h3>
+                    <p className="text-xs text-soft">What this drawing is doing, and what to change.</p>
                   </div>
                 </div>
 
@@ -2386,7 +2378,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-3 py-1 text-xs font-semibold text-ink hover:border-copper transition-colors shadow-xs"
                   >
                     <IconRefresh size={13} className={aiAnalyzing ? "animate-spin" : ""} />
-                    <span>{aiAnalyzing ? "Auditing..." : "Re-Audit"}</span>
+                    <span>{aiAnalyzing ? "Checking…" : "Check again"}</span>
                   </button>
                 </div>
               </div>
@@ -2395,32 +2387,32 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               {aiReport && (
                 <div className="mt-4 space-y-3">
                   <div className="rounded-lg border border-line bg-paper p-3 shadow-xs">
-                    <p className="kicker text-[10px] text-soft">1. Status</p>
+                    <p className="kicker text-[10px] text-soft">Now</p>
                     <p className="mt-0.5 text-xs font-bold text-ink">{aiReport.statusText}</p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="rounded-lg border border-line bg-paper p-3 shadow-xs">
-                      <p className="kicker text-[10px] text-danger">2. What is Wrong (or Risky)</p>
+                      <p className="kicker text-[10px] text-danger">The risk</p>
                       <p className="mt-1 text-xs leading-relaxed text-ink">{aiReport.whatIsWrong}</p>
                     </div>
 
                     <div className="rounded-lg border border-line bg-paper p-3 shadow-xs">
-                      <p className="kicker text-[10px] text-copper">3. Why it Matters</p>
+                      <p className="kicker text-[10px] text-copper">Why it matters</p>
                       <p className="mt-1 text-xs leading-relaxed text-ink">{aiReport.whyItMatters}</p>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-line bg-paper p-3 shadow-xs">
+                  {aiReport.stepByStep.length > 0 ? <div className="rounded-lg border border-line bg-paper p-3 shadow-xs">
                     <div className="flex items-center justify-between">
-                      <p className="kicker text-[10px] text-good">4. Step-by-Step Guided Action Plan</p>
+                      <p className="kicker text-[10px] text-good">What to change</p>
                       {aiReport.canAutoFix && (
                         <button
                           onClick={applyRecommendedFix}
                           className="flex items-center gap-1.5 rounded border border-good/40 bg-good/10 px-2.5 py-1 text-xs font-bold text-good hover:bg-good/20 transition-all shadow-xs"
                         >
                           <IconArchitect size={13} />
-                          <span>Apply Recommended Fix</span>
+                          <span>Apply this change</span>
                         </button>
                       )}
                     </div>
@@ -2431,7 +2423,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                         </li>
                       ))}
                     </ol>
-                  </div>
+                  </div> : null}
 
                   {/* Ask AI Architecture Question Form */}
                   <form
@@ -2448,7 +2440,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                       type="text"
                       value={aiQuestion}
                       onChange={(e) => setAiQuestion(e.target.value)}
-                      placeholder="Ask AI Architect (e.g. 'Why do we need a Redis cache between API and DB?')..."
+                      placeholder="Ask about this drawing"
                       className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-xs font-medium text-ink shadow-xs"
                     />
                     <button
@@ -2469,10 +2461,10 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
           <div className="rounded-xl border border-line bg-raised p-4 text-xs text-soft shadow-xs">
             <h4 className="flex items-center gap-2 font-bold text-ink">
               <IconPrinciple size={16} className="text-copper" />
-              <span>Systems Engineering Learning Principle</span>
+              <span>One job each</span>
             </h4>
             <p className="mt-1 leading-relaxed">
-              In modern distributed cloud architecture, every component must have a single clear responsibility. Direct connections between clients and databases expose credentials and crash under spikes. By inserting an API Gateway, an Auth Guard, and an App Logic Tier with in-memory caching, systems become resilient, secure, and observable.
+              Each part of the drawing has one job. The person does not talk to the record directly.
             </p>
           </div>
         </div>

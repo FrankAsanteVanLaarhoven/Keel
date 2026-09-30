@@ -48,9 +48,16 @@ export default async function WeekPage({ params }: { params: Promise<{ id: strin
       <ul className="mt-3 space-y-2">
         {week.required.map((need) => {
           const done = rows.some((row) => row.itemId === need.itemId && row.kind === need.kind && row.score === 1);
+          const name = need.kind === "check"
+            ? m.check
+            : need.kind === "lab" || need.kind === "bench"
+              ? m.practice
+              : need.kind === "ops-brief"
+                ? m.yourBrief
+                : m.capstone;
           return (
             <li key={`${need.itemId}-${need.kind}`}>
-              {done ? "●" : "○"} {need.itemId} · {need.kind}
+              {done ? m.acceptedLabel : m.weekOpen} · {name}
             </li>
           );
         })}

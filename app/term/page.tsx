@@ -28,46 +28,55 @@ export default async function TermPage() {
       <p className="kicker">{m.termNav}</p>
       <h1 className="mt-3 text-4xl font-medium tracking-tight md:text-6xl">{m.termTitle}</h1>
       <p className="mt-4 max-w-2xl text-lg">{m.termDeck}</p>
-      <p className="mt-4"><a className="underline" href="/api/calendar">{m.calendarImport}</a></p>
-      <p className="mt-2 max-w-2xl text-sm text-soft">{m.calendarHelp}</p>
-      <Announcements m={m} />
-      <Courses m={m} />
-      {suggestion.next ? (
-        <p className="mt-6">
-          {m.next}: <Link className="underline" href={`/term/${suggestion.next.id}`}>{suggestion.next.title}</Link>
-        </p>
-      ) : null}
-      {suggestion.rated ? (
-        <p className="mt-2 text-soft">
-          {m.recommended}: <Link className="underline" href={`/term/${suggestion.rated.id}`}>{suggestion.rated.title}</Link>
-        </p>
-      ) : null}
-      <ol className="mt-10 divide-y divide-line border-y border-line">
+      <ol className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {weeks.map((week) => {
           const work = catalogue.find((item) => item.id === week.id) ?? null;
           const window = workOpen(work, Date.now());
-          const ready = staff || (window.open && (week.no === 1 || previousWeeksDone(week, rows)));
+          const sequenceOpen = week.no === 1 || previousWeeksDone(week, rows);
+          const ready = staff || (window.open && sequenceOpen);
           const done = weekDone(week, rows);
+          const current = ready && !done && suggestion.next?.id === week.id;
+          const held = !staff && !window.open;
+          const note = done ? m.acceptedLabel : current ? m.thisWeek : ready ? m.weekOpen : held ? m.weekPaused : m.weekLocked;
           const score = scores.find((item) => item.weekId === week.id);
+          const body = (
+            <>
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="num">{String(week.no).padStart(2, "0")}</span>
+                <span className="kicker">{note}</span>
+              </span>
+              <span className="mt-3 block text-xl font-medium">{work?.title || week.title}</span>
+              <span className="mt-2 block text-sm text-soft">{work?.brief || week.promise}</span>
+              {score ? <span className="num mt-3 block text-sm">{score.stars.toFixed(1)}</span> : null}
+            </>
+          );
+          const frame = current
+            ? "block border border-ink bg-raised px-4 py-4"
+            : done
+              ? "block border border-line px-4 py-4"
+              : ready
+                ? "block border border-line px-4 py-4"
+                : "block border border-line px-4 py-4 text-soft";
           return (
-            <li key={week.id} className="grid gap-2 py-5 md:grid-cols-[5rem_1fr_auto] md:items-baseline">
-              <span className="num text-soft">{String(week.no).padStart(2, "0")}</span>
-              <div>
-                {ready ? (
-                  <Link className="text-2xl font-medium" href={`/term/${week.id}`}>{work?.title || week.title}</Link>
-                ) : (
-                  <p className="text-2xl font-medium text-soft">{work?.title || week.title}</p>
-                )}
-                <p className="mt-2 max-w-2xl text-soft">{work?.brief || week.promise}</p>
-              </div>
-              <p className="text-sm text-soft">
-                {done ? m.acceptedLabel : ready ? m.weekOpen : window.reason === "paused" ? m.weekPaused : m.weekLocked}
-                {score ? <span className="ms-3 num">{score.stars.toFixed(1)}</span> : null}
-              </p>
+            <li key={week.id}>
+              {ready || done ? (
+                <Link className={frame} href={`/term/${week.id}`} aria-current={current ? "true" : undefined}>{body}</Link>
+              ) : (
+                <div className={frame} aria-disabled="true">{body}</div>
+              )}
             </li>
           );
         })}
       </ol>
+      <p className="mt-8"><a className="underline" href="/api/calendar">{m.calendarImport}</a></p>
+      <p className="mt-2 max-w-2xl text-sm text-soft">{m.calendarHelp}</p>
+      <Announcements m={m} />
+      <Courses m={m} />
+      {suggestion.rated ? (
+        <p className="mt-6 text-soft">
+          {m.recommended}: <Link className="underline" href={`/term/${suggestion.rated.id}`}>{suggestion.rated.title}</Link>
+        </p>
+      ) : null}
       <p className="mt-8">
         <Link className="underline" href="/survey">{m.surveyTitle}</Link>
       </p>

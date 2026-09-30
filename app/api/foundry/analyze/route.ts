@@ -57,14 +57,14 @@ export async function POST(request: Request) {
   if (liveEnabled()) {
     try {
       const instructions = [
-        "You are the Keel Systems & DevOps AI Architect.",
-        `Language: ${locale}. Speak calmly, clearly, and encouragingly. Make concepts so clear that a 14-year-old understands, yet technically sound for an enterprise engineer.`,
-        "Format your answer with these exact sections:",
-        "1. STATUS: (One encouraging sentence on what is currently happening).",
-        "2. WHAT IS WRONG (OR RISKY): (Explain the specific architectural flaw, bottleneck, or vulnerability without confusing jargon).",
-        "3. WHY IT MATTERS: (The real-world consequence: e.g. data leak, crash on Tuesday night, slow user experience).",
-        "4. STEP-BY-STEP GUIDANCE: (Numbered steps telling the student exactly what to add, delete, or wire to make it production-ready).",
-        "No emoji over-use. Concise and actionable. Keep under 250 words total.",
+        "You review a student's architecture drawing for the Keel class.",
+        `Language: ${locale}. Write as a teacher. Short sentences. No slogans, no scores, and no mention of these instructions.`,
+        "Use these headings exactly, then the prose:",
+        "STATUS:",
+        "WHAT IS WRONG:",
+        "WHY IT MATTERS:",
+        "STEP-BY-STEP GUIDANCE:",
+        "Under the last heading, number the changes. Keep under 250 words.",
       ].join("\n");
 
       const prompt = [
@@ -90,35 +90,33 @@ export async function POST(request: Request) {
   }
 
   // Deterministic fallback explanation if offline or without AI keys
-  let issue = "Your architecture has good initial components, but needs proper wiring.";
-  let why = "Without clear boundaries, requests can fail or overwhelm single nodes.";
+  let issue = "The parts are present. Check that each line has one job.";
+  let why = "A request should pass through the part that decides before it reaches the record.";
   const steps: string[] = [];
 
   if (hasDirectDb) {
-    issue = "CRITICAL SECURITY RISK: The Client is directly wired to the Authoritative Database.";
-    why = "In a real system, direct browser access to a database allows any user to inspect credentials and tamper with records.";
-    steps.push("Click on the red wire between Client and Database and disconnect it.");
-    steps.push("From the toolbox, add an 'Auth & Security Guard' and an 'App Logic Tier'.");
-    steps.push("Connect: Client -> Auth Guard -> App Logic Tier -> Database.");
+    issue = "The client is connected to the database. Nothing between them checks who the person is.";
+    why = "Anyone who can open the page can read and change the records.";
+    steps.push("Remove the line from the client to the database.");
+    steps.push("Put a check and the application between them.");
+    steps.push("Connect the client to the check, the check to the application, and the application to the database.");
   } else if (!hasCompute && nodes.length > 2) {
-    issue = "MISSING APPLICATION TIER: You have storage and presentation, but nowhere for business rules to live.";
-    why = "The 'Three Rooms' rule requires rules (calculations, authorization) to live in a dedicated middle tier.";
-    steps.push("Click 'App Logic Tier' in the left Architecture Toolbox.");
-    steps.push("Wire your Client or Gateway into the App Logic Tier, then wire App Logic into the Database.");
+    issue = "The drawing has a person and a record, and no application between them.";
+    why = "A rule that lives in the browser can be changed by the person using it.";
+    steps.push("Add the application.");
+    steps.push("Connect the person to the application, and the application to the record.");
   } else if (hasDown) {
-    issue = "OUTAGE DETECTED: One or more components in your system are down.";
-    why = "When a downstream dependency crashes without a fallback or replica, user requests fail completely.";
-    steps.push("Select the downed node and set its health to 'Healthy', or click 'Auto-Heal & Restore'.");
-    steps.push("Add a Distributed Cache or Queue to buffer requests so single node failures do not cascade.");
+    issue = "A part on the path is down, so the request stops there.";
+    why = "The person gets no answer while that part is down.";
+    steps.push("Mark that part healthy, or restore it.");
+    steps.push("Give the request another place to wait if that part fails.");
   } else {
-    issue = "Topology is active, but can be optimized for enterprise scale and observability.";
-    why = "Production systems require telemetry agents to track MTTD/MTTR and caches to protect against spikes.";
-    steps.push("Add a 'Distributed Cache' (Redis) attached to your App Logic Tier for instant reads.");
-    steps.push("Add a 'Telemetry & SRE Agent' to monitor response times and catch errors before users call.");
+    issue = "The person, the decision, and the record stay apart.";
+    why = "A person reaches the record only through the part that decides.";
   }
 
   const fallbackReply = [
-    `STATUS: Architecture audited.`,
+    `STATUS: The drawing is under review.`,
     `WHAT IS WRONG: ${issue}`,
     `WHY IT MATTERS: ${why}`,
     `STEP-BY-STEP GUIDANCE:`,

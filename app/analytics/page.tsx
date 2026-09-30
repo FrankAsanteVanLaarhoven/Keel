@@ -8,9 +8,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const m = t(locale);
   return {
-    title: `${m.analytics} — Keel Systems for people`,
-    description: "Real-time systems architecture throughput, latency percentiles, student cohort mastery, and resilience telemetry setting new industry benchmarks.",
-    alternates: { canonical: "/analytics" },
+    title: `${m.analyticsTitle} — Keel`,
+    description: m.analyticsDeck,
+    robots: { index: false, follow: false },
   };
 }
 
