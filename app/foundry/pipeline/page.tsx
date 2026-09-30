@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const m = t(locale);
   return {
-    title: `${m.pipelineTitle} — Keel`,
+    title: m.pipelineTitle,
     description: m.pipelineDeck,
     robots: { index: false, follow: false },
   };

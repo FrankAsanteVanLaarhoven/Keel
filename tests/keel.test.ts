@@ -1000,10 +1000,12 @@ describe("data pipeline", () => {
       expect(delivered.status).toBe(200);
       const built = await delivered.json() as {
         datasets: { name: string; version: number }[];
+        lineage: { name: string; stale: boolean }[];
         build: { status: string; engine: string; steps: { status: string }[]; spark: string; flink: string };
       };
       expect(built.build.engine).toBe(recordsEngine);
       expect(built.build.status).toBe("built");
+      expect(built.lineage.find((item) => item.name === "Order status")?.stale).toBe(false);
       expect(built.datasets.find((dataset) => dataset.name === "order_status")?.version).toBe(1);
       expect(built.build.spark).toContain("until a Spark worker is connected");
       expect(built.build.spark).toContain("dataset/orders/v1");
@@ -1011,9 +1013,14 @@ describe("data pipeline", () => {
       expect(built.build.flink).toContain("'connector' = 'filesystem'");
       const repeat = await call(cookie, "POST", { action: "deliver" });
       expect(repeat.status).toBe(200);
-      const current = await repeat.json() as { datasets: { name: string; version: number }[]; build: { status: string; engine: string; steps: { status: string }[] } };
+      const current = await repeat.json() as {
+        datasets: { name: string; version: number }[];
+        lineage: { stale: boolean }[];
+        build: { status: string; engine: string; steps: { status: string }[] };
+      };
       expect(current.build.status).toBe("current");
       expect(current.build.engine).toBe(recordsEngine);
+      expect(current.lineage.every((item) => item.stale === false)).toBe(true);
       expect(current.build.steps.every((step) => step.status === "current")).toBe(true);
       expect(current.datasets.find((dataset) => dataset.name === "order_status")?.version).toBe(1);
       const branched = await call(cookie, "POST", { action: "branch", name: "review", from: "main" });

@@ -243,7 +243,9 @@ async function viewOf(ownerId: string, branch: BranchRow): Promise<PipelineView>
   const runs = await runsOf(branch.id);
   let lineage: PipelineView["lineage"] = [];
   try {
-    const order = orderTransforms(transforms, datasets.map((dataset) => dataset.name));
+    const outputNames = new Set(transforms.map((transform) => transform.outputName));
+    const sources = datasets.filter((dataset) => !outputNames.has(dataset.name));
+    const order = orderTransforms(transforms, sources.map((dataset) => dataset.name));
     const hashes: Record<string, string> = {};
     for (const dataset of datasets) hashes[dataset.name] = dataset.hash;
     const stale = new Set(staleTransformIds(order, hashes, runs));

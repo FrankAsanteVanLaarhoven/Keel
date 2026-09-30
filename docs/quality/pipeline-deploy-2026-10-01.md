@@ -41,4 +41,14 @@ The pipeline stays with the signed-in account. Another account does not see it. 
 | Q17 | NOT RUN | No bundle budget is recorded for this change. |
 | Q18 | NOT RUN | 360px, tablet, and desktop were not opened. |
 | Q19 | NOT RUN | Spacing was not inspected on a screen. The page uses the existing classes. |
-| Q20 | NOT RUN | The signed-in form was not clicked. Keyboard focus was not checked. The request test called the route directly. |
+| Q20 | PASS | On 1 October 2026 Chrome opened the local class, signed in as the super admin, opened the orders sample, previewed it, and delivered it. The first delivery said Delivered. The second said Current. The ledger opened for that account. Keyboard focus was not checked. |
+
+## Browser
+
+Chrome on this machine signed in to http://127.0.0.1:3960 as the super admin and used the pipeline. The account landed on Cases, with Class and Ledger in the header. The ledger opened. The orders sample landed, preview ran, the first delivery said Delivered, and the second said Current. `order_status` stayed at version 1.
+
+The transform card still said Out of date after that current delivery. The page was treating the dataset the transform had just written as a second writer of the same name, then marking the transform stale. The lineage now ignores those written datasets when it orders the branch, which is the same rule the delivery already uses. A following request test checks that the card is current.
+
+The pipeline title was `Data pipeline — Keel · Keel` because the page title already ended in Keel and the site template adds Keel. The page title is now the pipeline name alone.
+
+A production build reported React hydration error 418, a text mismatch, on the pages that were opened. The clock time already opts out of that warning. The remaining mismatch was not traced to one control. Phone width was opened at 390px. The header sits over the page in a full-page capture because it stays fixed; a viewport capture is still required to judge the mobile header. Keyboard focus was not checked.
