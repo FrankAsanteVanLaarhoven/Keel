@@ -235,6 +235,7 @@ export const ja: Messages = {
   worldShort: "世界",
   expandClock: "世界時計を表示",
   collapseClock: "世界時計を隠す",
+  clockMenu: "追加または削除",
   clockAdd: "国を追加",
   clockCountry: "国",
   clockChoose: "国を選ぶ",

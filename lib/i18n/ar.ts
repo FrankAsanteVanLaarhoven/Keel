@@ -235,6 +235,7 @@ export const ar: Messages = {
   worldShort: "العالم",
   expandClock: "أظهر ساعة العالم",
   collapseClock: "أخف ساعة العالم",
+  clockMenu: "إضافة أو إزالة",
   clockAdd: "أضف بلداً",
   clockCountry: "البلد",
   clockChoose: "اختر بلداً",

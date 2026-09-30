@@ -235,6 +235,7 @@ export const pt: Messages = {
   worldShort: "Mundo",
   expandClock: "Mostrar o relógio mundial",
   collapseClock: "Esconder o relógio mundial",
+  clockMenu: "Adicionar ou remover",
   clockAdd: "Adicionar um país",
   clockCountry: "País",
   clockChoose: "Escolher um país",

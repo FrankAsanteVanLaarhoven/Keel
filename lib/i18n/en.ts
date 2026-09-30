@@ -233,6 +233,7 @@ export const en = {
   worldShort: "World",
   expandClock: "Show the world clock",
   collapseClock: "Hide the world clock",
+  clockMenu: "Add or remove",
   clockAdd: "Add a country",
   clockCountry: "Country",
   clockChoose: "Choose a country",

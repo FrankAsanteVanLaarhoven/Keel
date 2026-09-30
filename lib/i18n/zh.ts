@@ -235,6 +235,7 @@ export const zh: Messages = {
   worldShort: "世界",
   expandClock: "显示世界时钟",
   collapseClock: "隐藏世界时钟",
+  clockMenu: "添加或移除",
   clockAdd: "添加一个国家",
   clockCountry: "国家",
   clockChoose: "选择一个国家",
