@@ -5,7 +5,7 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { dataDir, ensureRecords, insertProfile, wipeUser } from "./db";
 import { authDatabase } from "./sql";
-import { cleanName, isDesignatedAdmin } from "./security";
+import { cleanName, isDesignatedAdmin, publicSignInLimit, publicSignUpLimit } from "./security";
 
 mkdirSync(dataDir, { recursive: true });
 void ensureRecords();
@@ -61,8 +61,8 @@ export const auth = betterAuth({
     window: 60,
     max: 30,
     customRules: {
-      "/sign-in/email": { window: 300, max: 5 },
-      "/sign-up/email": { window: 3600, max: 8 },
+      "/sign-in/email": { window: publicSignInLimit.windowSeconds, max: publicSignInLimit.max },
+      "/sign-up/email": { window: publicSignUpLimit.windowSeconds, max: publicSignUpLimit.max },
     },
   },
   trustedOrigins: [

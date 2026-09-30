@@ -33,8 +33,9 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
             ? await authClient.signIn.email({ email, password })
             : await authClient.signUp.email({ email, password, name });
           if (result.error) {
+            const status = result.error.status ?? 0;
             const code = `${result.error.code ?? ""} ${result.error.message ?? ""}`.toLowerCase();
-            setError(mode === "up" && code.includes("exist") ? m.emailTaken : mode === "in" ? m.authFailed : m.signupFailed);
+            setError(status === 429 ? m.rateLimited : status >= 500 ? m.waking : mode === "up" && code.includes("exist") ? m.emailTaken : mode === "in" ? m.authFailed : m.signupFailed);
             setPending(false);
             return;
           }
@@ -76,13 +77,19 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
           </Field>
         ) : null}
         {error ? <p role="alert">{error}</p> : null}
-        <button className="border border-ink bg-ink px-4 py-2 text-sm text-paper disabled:opacity-40" disabled={pending} type="submit">
+        <button className="border border-ink bg-ink px-4 py-2 text-sm text-paper disabled:opacity-40" disabled={pending} aria-busy={pending} type="submit">
           {pending ? m.loading : mode === "in" ? m.signIn : m.create}
         </button>
       </form>
       <p className="mt-6 text-sm">
         <Link className="underline" href={mode === "in" ? "/sign-up" : "/sign-in"}>{mode === "in" ? m.needAccount : m.haveAccount}</Link>
       </p>
+      {mode === "in" ? (
+        <p className="mt-4 text-sm text-soft">
+          <span className="block font-medium text-ink">{m.forgotPassphrase}</span>
+          {m.forgotHelp}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -161,6 +168,7 @@ function AccountForm({ m, me, refresh }: { m: Messages; me: NonNullable<ReturnTy
       <p className="mt-6 text-sm">
         {m.voiceConsent}: {me.consent ? m.voiceOn : m.voiceOff}
       </p>
+      <ChangePassphrase m={m} />
       <p className="mt-8">
         <a className="underline" href="/api/account/export">{m.exportLabel}</a>
       </p>
@@ -195,6 +203,55 @@ function AccountForm({ m, me, refresh }: { m: Messages; me: NonNullable<ReturnTy
         {m.signOut}
       </button>
     </div>
+  );
+}
+
+function ChangePassphrase({ m }: { m: Messages }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState("");
+  const [pending, setPending] = useState(false);
+  return (
+    <form
+      className="mt-10 space-y-4 border-t border-line pt-6"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (next !== confirm) {
+          setMessage(m.passphraseMismatch);
+          return;
+        }
+        setPending(true);
+        setMessage("");
+        const result = await authClient.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: true });
+        setPending(false);
+        if (result.error) {
+          const status = result.error.status ?? 0;
+          setMessage(status === 429 ? m.rateLimited : status >= 500 ? m.waking : m.authFailed);
+          return;
+        }
+        setCurrent("");
+        setNext("");
+        setConfirm("");
+        setMessage(m.passphraseChanged);
+      }}
+    >
+      <h2 className="text-xl">{m.changePassphrase}</h2>
+      <p className="text-sm text-soft">{m.changePassphraseHelp}</p>
+      <Field label={m.currentPassphrase}>
+        <input className="mt-1 w-full border border-line bg-raised px-3 py-2" type="password" autoComplete="current-password" value={current} onChange={(event) => setCurrent(event.target.value)} required />
+      </Field>
+      <Field label={m.newPassphrase} hint={m.passphraseRule}>
+        <input className="mt-1 w-full border border-line bg-raised px-3 py-2" type="password" autoComplete="new-password" minLength={12} value={next} onChange={(event) => setNext(event.target.value)} required />
+      </Field>
+      <Field label={m.confirmPassphrase}>
+        <input className="mt-1 w-full border border-line bg-raised px-3 py-2" type="password" autoComplete="new-password" minLength={12} value={confirm} onChange={(event) => setConfirm(event.target.value)} required />
+      </Field>
+      {message ? <p role="status">{message}</p> : null}
+      <button className="border border-ink px-4 py-2 text-sm disabled:opacity-40" type="submit" disabled={pending} aria-busy={pending}>
+        {pending ? m.loading : m.changePassphrase}
+      </button>
+    </form>
   );
 }
 

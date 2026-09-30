@@ -5,7 +5,7 @@
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFrankAsanteVanLaarhoven%2FKeel)
 [![Live class](https://img.shields.io/badge/Vercel-keelai--os.vercel.app-success?logo=vercel&style=for-the-badge)](https://keelai-os.vercel.app)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?logo=github&style=for-the-badge)](https://github.com/FrankAsanteVanLaarhoven/Keel)
-[![Tests](https://img.shields.io/badge/Tests-32%20Passing-emerald?style=for-the-badge)](tests/keel.test.ts)
+[![Tests](https://img.shields.io/badge/Tests-34%20Passing-emerald?style=for-the-badge)](tests/keel.test.ts)
 
 - **Public class**: [https://keelai-os.vercel.app](https://keelai-os.vercel.app)
 - **Source**: [https://github.com/FrankAsanteVanLaarhoven/Keel](https://github.com/FrankAsanteVanLaarhoven/Keel)
@@ -72,6 +72,8 @@ Assessment text is read and then discarded in both places. A teacher’s class f
 Sign-in is [Better Auth](https://better-auth.com) on this server. Keel does not use a separate identity provider. Passphrases are hashed. The session cookie is HttpOnly and is used only to keep the session. Account rows live in the database described above.
 
 Set `BETTER_AUTH_SECRET` in production (32 characters or more). Locally, if it is unset, Keel writes `.data/secret`. One designated address holds the super admin role. Any other request for that role is stored as a student.
+
+A shared network can create 120 accounts an hour and sign in 120 times in fifteen minutes. Each email can try a passphrase five times in five minutes, so one passphrase cannot be guessed. A signed-in person can change the passphrase from the account page. If it is forgotten, the super admin sets a new one from the class book. The work stays, the old sessions end, and that person can sign in and change it. Keel does not send a reset email. The public database is on the free plan and may sleep when the class is idle. The first request waits and tries again. A daily check opens the record. It does not keep the database awake.
 
 ## Tutor and voice
 

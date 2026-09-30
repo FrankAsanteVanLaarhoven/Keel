@@ -47,6 +47,25 @@ export function isStaffOrAdmin(role?: string | null, email?: string | null): boo
   return false;
 }
 
+/** A shared classroom address can register and sign in together. Guessing one passphrase stays at five tries in five minutes. */
+export const publicSignUpLimit = { windowSeconds: 3600, max: 120 };
+export const publicSignInLimit = { windowSeconds: 900, max: 120 };
+export const passphraseAttemptLimit = { windowMs: 5 * 60 * 1000, max: 5 };
+
+export function passphraseOk(value: string): boolean {
+  return value.length >= 12 && value.length <= 128 && !/[\r\n]/.test(value);
+}
+
+/** Only the designated super admin can replace someone else's passphrase, and not their own. */
+export function canResetPassphrase(actorEmail?: string | null, targetEmail?: string | null): boolean {
+  if (!isDesignatedAdmin(actorEmail)) return false;
+  const actor = actorEmail?.trim().toLowerCase() ?? "";
+  const target = targetEmail?.trim().toLowerCase() ?? "";
+  if (!target || target === actor) return false;
+  if (isDesignatedAdmin(target)) return false;
+  return true;
+}
+
 export function noteMinimum(locale: Locale): number {
   return locale === "zh" || locale === "ja" ? 40 : 80;
 }

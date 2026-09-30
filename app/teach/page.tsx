@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PassphraseReset } from "@/components/passphrase-reset";
 import { PublishDesk, TeachForms } from "@/components/term-desk";
 import { allReviews, cohort, listAttempts, listWork } from "@/lib/classbook";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { currentUser } from "@/lib/ready";
-import { isStaffOrAdmin } from "@/lib/security";
+import { isDesignatedAdmin, isStaffOrAdmin } from "@/lib/security";
 import { getProfile } from "@/lib/store";
 import { weeksDone } from "@/lib/term";
 import { progressSummary } from "@/lib/store";
@@ -71,6 +72,7 @@ export default async function TeachPage() {
           </tbody>
         </table>
       </div>
+      {isDesignatedAdmin(user.email) ? <PassphraseReset m={m} /> : null}
       <h2 className="mt-12 text-2xl font-medium">{m.recentTries}</h2>
       <ul className="mt-4 divide-y divide-line border-y border-line">
         {attempts.map((attempt) => (

@@ -19,9 +19,11 @@ import { gradeOps } from "../lib/server/ops-grade";
 import { opsBriefAnswers, opsCheckAnswers, opsDecisionAnswers, opsLabAnswers } from "../lib/server/ops-answers";
 import { marksOf, streakOf } from "../lib/progress";
 import { takeToken } from "../lib/rate";
-import { bindPlaceholders } from "../lib/sql";
+import { auth } from "../lib/auth";
+import { POST as resetPassphrase } from "../app/api/admin/passphrase/route";
+import { bindPlaceholders, isDatabaseWaking, sqlGet } from "../lib/sql";
 import { matchAccept } from "../lib/locale";
-import { cacheControlFor, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
+import { cacheControlFor, canResetPassphrase, cleanName, cleanRole, clientDay, isStaffOrAdmin, leaderboardSql, mayCacheStatic, noteOk, passphraseAttemptLimit, passphraseOk, publicSignInLimit, publicSignUpLimit, roleFor, sameOrigin, utcWeekStart } from "../lib/security";
 import { insertProfile, wipeUser } from "../lib/db";
 import { saveProgress, getCohortSubmissions, updateTeacherEvaluation } from "../lib/store";
 import { localReply } from "../lib/tutor";
@@ -492,6 +494,107 @@ describe("super admin & teacher evaluation ledger", () => {
     expect(roleFor("frankleroyvan@gmail.com", "student")).toBe("super_admin");
     expect(roleFor("other@keel.edu", "super_admin")).toBe("student");
   });
+
+  it("keeps a classroom allowance and a per-email guessing cap", () => {
+    expect(publicSignUpLimit).toEqual({ windowSeconds: 3600, max: 120 });
+    expect(publicSignInLimit).toEqual({ windowSeconds: 900, max: 120 });
+    expect(passphraseAttemptLimit).toEqual({ windowMs: 5 * 60 * 1000, max: 5 });
+    expect(passphraseOk("short")).toBe(false);
+    expect(passphraseOk(`twelve chars\n`)).toBe(false);
+    expect(passphraseOk("a".repeat(129))).toBe(false);
+    expect(passphraseOk("classroom-pass")).toBe(true);
+    expect(canResetPassphrase("frankleroyvan@gmail.com", "student@keel.edu")).toBe(true);
+    expect(canResetPassphrase("frankleroyvan@gmail.com", "frankleroyvan@gmail.com")).toBe(false);
+    expect(canResetPassphrase("frankleroyvan@gmail.com", " FrankLeroyVan@gmail.com ")).toBe(false);
+    expect(canResetPassphrase("staff@keel.edu", "student@keel.edu")).toBe(false);
+    expect(canResetPassphrase("frankleroyvan@gmail.com", "")).toBe(false);
+    process.env.SUPER_ADMIN_EMAIL = "principal@keel.edu";
+    expect(canResetPassphrase("principal@keel.edu", "student@keel.edu")).toBe(true);
+    expect(canResetPassphrase("principal@keel.edu", "principal@keel.edu")).toBe(false);
+    expect(canResetPassphrase("principal@keel.edu", "frankleroyvan@gmail.com")).toBe(false);
+    delete process.env.SUPER_ADMIN_EMAIL;
+    expect(isDatabaseWaking(Object.assign(new Error("the database system is starting up"), { code: "57P03" }))).toBe(true);
+    expect(isDatabaseWaking(new Error("relation does not exist"))).toBe(false);
+  });
+
+  it("lets a signed-in person change a passphrase and the super admin replace a forgotten one", async () => {
+    const adminEmail = "keel-access-admin@example.com";
+    const studentEmail = "keel-access-student@example.com";
+    const first = "classroom-passphrase-1";
+    const second = "classroom-passphrase-2";
+    const third = "classroom-passphrase-3";
+    const previousAdmin = process.env.SUPER_ADMIN_EMAIL;
+    process.env.SUPER_ADMIN_EMAIL = adminEmail;
+    const ids: string[] = [];
+    const cookieFor = async (email: string, password: string) => {
+      const response = await auth.api.signInEmail({ body: { email, password }, asResponse: true });
+      expect(response.ok).toBe(true);
+      return response.headers.getSetCookie().map((item) => item.split(";")[0]).join("; ");
+    };
+    const resetRequest = (cookie: string, email: string, password: string) =>
+      new Request("http://127.0.0.1:3960/api/admin/passphrase", {
+        method: "POST",
+        headers: {
+          origin: "http://127.0.0.1:3960",
+          host: "127.0.0.1:3960",
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({ email, password }),
+      });
+    try {
+      const ctx = await auth.$context;
+      for (const email of [adminEmail, studentEmail]) {
+        const existing = await ctx.internalAdapter.findUserByEmail(email);
+        if (!existing?.user?.id) continue;
+        await wipeUser(existing.user.id);
+        await ctx.internalAdapter.deleteUser(existing.user.id);
+      }
+      const admin = await auth.api.signUpEmail({ body: { name: "Access Admin", email: adminEmail, password: first } });
+      const student = await auth.api.signUpEmail({ body: { name: "Access Student", email: studentEmail, password: first } });
+      ids.push(admin.user.id, student.user.id);
+      await saveProgress({
+        userId: student.user.id,
+        itemId: "harbor",
+        kind: "brief",
+        correct: true,
+        xp: 10,
+        detail: JSON.stringify({ note: "kept across a passphrase reset" }),
+        day: "2026-09-30",
+      });
+      const studentCookie = await cookieFor(studentEmail, first);
+      const changed = await auth.api.changePassword({
+        body: { currentPassword: first, newPassword: second, revokeOtherSessions: true },
+        headers: new Headers({ cookie: studentCookie, origin: "http://127.0.0.1:3960" }),
+        asResponse: true,
+      });
+      expect(changed.status).toBe(200);
+      const stale = await auth.api.signInEmail({ body: { email: studentEmail, password: first }, asResponse: true });
+      expect(stale.ok).toBe(false);
+      const renewed = await cookieFor(studentEmail, second);
+      expect((await resetPassphrase(resetRequest(renewed, studentEmail, third))).status).toBe(403);
+      const adminCookie = await cookieFor(adminEmail, first);
+      expect((await resetPassphrase(resetRequest(adminCookie, adminEmail, third))).status).toBe(403);
+      expect((await resetPassphrase(resetRequest(adminCookie, studentEmail, third))).status).toBe(200);
+      expect(await auth.api.getSession({ headers: new Headers({ cookie: renewed }) })).toBeNull();
+      const previous = await auth.api.signInEmail({ body: { email: studentEmail, password: second }, asResponse: true });
+      expect(previous.ok).toBe(false);
+      expect((await cookieFor(studentEmail, third)).length).toBeGreaterThan(0);
+      const kept = await sqlGet<{ n: number }>(`SELECT COUNT(*) AS n FROM keel_progress WHERE user_id = ?`, [student.user.id]);
+      expect(Number(kept?.n ?? 0)).toBeGreaterThan(0);
+    } finally {
+      if (previousAdmin === undefined) delete process.env.SUPER_ADMIN_EMAIL;
+      else process.env.SUPER_ADMIN_EMAIL = previousAdmin;
+      const ctx = await auth.$context;
+      for (const email of [adminEmail, studentEmail]) {
+        const existing = await ctx.internalAdapter.findUserByEmail(email);
+        if (!existing?.user?.id) continue;
+        await wipeUser(existing.user.id);
+        await ctx.internalAdapter.deleteUser(existing.user.id);
+      }
+      for (const id of ids) await wipeUser(id);
+    }
+  }, 30_000);
 
   it("records submissions and allows teacher evaluation overrides", async () => {
     await wipeUser("student-42");

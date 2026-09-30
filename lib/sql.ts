@@ -48,7 +48,7 @@ export function postgresPool(): Pool {
       connectionString,
       max: process.env.VERCEL ? 1 : 3,
       idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 15_000,
       allowExitOnIdle: true,
       ssl: local ? undefined : { rejectUnauthorized: false },
     });
@@ -66,6 +66,22 @@ function sqliteDb(): DatabaseSync {
   return db;
 }
 
+export function isDatabaseWaking(error: unknown): boolean {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|ECONNRESET|ECONNREFUSED|EAI_AGAIN|Connection terminated|Connection ended|too many clients|the database system is starting|57P01|53300|08000|08006|57P03/i.test(`${code} ${message}`);
+}
+
+async function withWake<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isDatabaseWaking(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return run();
+  }
+}
+
 export async function sqlExec(statement: string): Promise<void> {
   const text = statement.trim();
   if (!text) return;
@@ -77,7 +93,7 @@ export async function sqlExec(statement: string): Promise<void> {
     .split(/;\s*(?:\n|$)/)
     .map((part) => part.trim().replace(/;$/, ""))
     .filter(Boolean);
-  for (const part of parts) await postgresPool().query(part);
+  for (const part of parts) await withWake(() => postgresPool().query(part));
 }
 
 export async function sqlIgnore(statement: string): Promise<void> {
@@ -90,7 +106,7 @@ export async function sqlIgnore(statement: string): Promise<void> {
 
 export async function sqlGet<T>(statement: string, params: unknown[] = []): Promise<T | undefined> {
   if (usesPostgres()) {
-    const result = await postgresPool().query(bindPlaceholders(statement, true), params);
+    const result = await withWake(() => postgresPool().query(bindPlaceholders(statement, true), params));
     return result.rows[0] as T | undefined;
   }
   return sqliteDb().prepare(statement).get(...(params as never[])) as T | undefined;
@@ -98,7 +114,7 @@ export async function sqlGet<T>(statement: string, params: unknown[] = []): Prom
 
 export async function sqlAll<T>(statement: string, params: unknown[] = []): Promise<T[]> {
   if (usesPostgres()) {
-    const result = await postgresPool().query(bindPlaceholders(statement, true), params);
+    const result = await withWake(() => postgresPool().query(bindPlaceholders(statement, true), params));
     return result.rows as T[];
   }
   return sqliteDb().prepare(statement).all(...(params as never[])) as T[];
@@ -106,7 +122,7 @@ export async function sqlAll<T>(statement: string, params: unknown[] = []): Prom
 
 export async function sqlRun(statement: string, params: unknown[] = []): Promise<void> {
   if (usesPostgres()) {
-    await postgresPool().query(bindPlaceholders(statement, true), params);
+    await withWake(() => postgresPool().query(bindPlaceholders(statement, true), params));
     return;
   }
   sqliteDb().prepare(statement).run(...(params as never[]));
