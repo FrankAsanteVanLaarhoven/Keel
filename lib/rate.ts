@@ -25,7 +25,7 @@ export async function takeToken(
   const windowStart = now - (now % windowMs);
   await db.run(
     `INSERT INTO keel_rate (bucket, window_start, count) VALUES (?, ?, 1)
-     ON CONFLICT(bucket, window_start) DO UPDATE SET count = count + 1`,
+     ON CONFLICT(bucket, window_start) DO UPDATE SET count = keel_rate.count + 1`,
     [bucket, windowStart],
   );
   const row = await db.get<{ count: number }>(`SELECT count FROM keel_rate WHERE bucket = ? AND window_start = ?`, [bucket, windowStart]);
