@@ -1,11 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import type { Messages } from "@/lib/i18n/en";
 import { useKeel } from "./keel-context";
 import { roomPlain, wordingText } from "@/lib/glossary";
 import { useWording } from "./wording";
+import {
+  anchors,
+  boardExtent,
+  isShape,
+  nodeSize,
+  pointOnWire,
+  snapCoord,
+  wirePath,
+  wireStyleOf,
+  type WireStyle,
+} from "@/lib/foundry-board";
 import {
   IconClient,
   IconGateway,
@@ -39,21 +51,13 @@ import {
 
 function NodeWords({ label, role, tool, type, bare }: { label: string; role: string; tool: string; type: string; bare?: boolean }) {
   const mode = useWording();
-  if (bare) return <>{wordingText(label, mode)}</>;
-  if (mode === "plain") return <p className="mt-1 truncate text-xs font-bold text-zinc-100">{roomPlain[type] || wordingText(label, mode)}</p>;
-  if (mode === "expand") {
-    return (
-      <>
-        <p className="mt-1 text-xs font-bold text-zinc-100">{wordingText(label, mode)}</p>
-        <p className="text-[10px] text-zinc-400">{wordingText(tool, mode)}</p>
-      </>
-    );
-  }
+  const meaning = mode === "plain" ? roomPlain[type] || wordingText(label, mode) : wordingText(label, mode);
+  if (bare) return <span title={wordingText(label, mode)}>{label}</span>;
   return (
     <>
-      <p className="mt-1 truncate text-xs font-bold text-zinc-100">{label}</p>
-      <p className="truncate text-[10px] text-zinc-300">{tool.split("/")[0]}</p>
-      <p className="sr-only">{role}</p>
+      <p className="mt-1 truncate text-xs font-bold text-inherit" title={meaning}>{label}</p>
+      {tool ? <p className="truncate text-[10px] text-inherit opacity-80" title={wordingText(tool, mode)}>{tool.split("/")[0]}</p> : null}
+      {role ? <p className="sr-only">{role}</p> : null}
     </>
   );
 }
@@ -67,7 +71,14 @@ export type NodeType =
   | "database"
   | "queue"
   | "ci"
-  | "telemetry";
+  | "telemetry"
+  | "text"
+  | "box"
+  | "ellipse"
+  | "diamond"
+  | "cylinder"
+  | "cloud"
+  | "note";
 
 export interface SystemNode {
   id: string;
@@ -75,6 +86,9 @@ export interface SystemNode {
   label: string;
   x: number;
   y: number;
+  w?: number;
+  h?: number;
+  z?: number;
   health: "healthy" | "degraded" | "down";
   latency: number; // ms
   capacity: number; // rps
@@ -89,6 +103,7 @@ export interface Connection {
   to: string;
   status: "idle" | "active" | "error";
   protocol?: string;
+  style?: WireStyle;
 }
 
 interface Particle {
@@ -150,7 +165,17 @@ const nodeTypeMeta: Record<
   queue: { name: "Message Broker / Queue", color: "#9a3412", Icon: IconQueue, tool: "Kafka / RabbitMQ / SQS", desc: "Decouples spikes by buffering async jobs and payments." },
   ci: { name: "CI/CD Pipeline Runner", color: "#0f766e", Icon: IconCI, tool: "GitHub Actions / GitLab CI", desc: "Runs automated linting, unit tests, secret scanning before deploy." },
   telemetry: { name: "Telemetry & SRE Agent", color: "#115e59", Icon: IconTelemetry, tool: "Prometheus / Grafana / OTel", desc: "Gathers logs, metrics, traces, and triggers actionable alerts." },
+  text: { name: "Text", color: "#e4e4e7", Icon: IconPrinciple, tool: "Label", desc: "Text" },
+  box: { name: "Box", color: "#a1a1aa", Icon: IconCompute, tool: "Rectangle", desc: "Box" },
+  ellipse: { name: "Ellipse", color: "#a1a1aa", Icon: IconClient, tool: "Ellipse", desc: "Ellipse" },
+  diamond: { name: "Diamond", color: "#a1a1aa", Icon: IconAuth, tool: "Diamond", desc: "Diamond" },
+  cylinder: { name: "Cylinder", color: "#a1a1aa", Icon: IconDatabase, tool: "Cylinder", desc: "Cylinder" },
+  cloud: { name: "Cloud", color: "#a1a1aa", Icon: IconGateway, tool: "Cloud", desc: "Cloud" },
+  note: { name: "Note", color: "#fbbf24", Icon: IconArchitect, tool: "Note", desc: "Note" },
 };
+
+const SERVICE_TYPES: NodeType[] = ["client", "gateway", "auth", "compute", "cache", "database", "queue", "ci", "telemetry"];
+const DRAW_TYPES: NodeType[] = ["text", "box", "ellipse", "diamond", "cylinder", "cloud", "note"];
 
 // 5 Rich Prebuilt Production Enterprise Practice Templates
 const DEMO_TEMPLATES: DemoTemplate[] = [
@@ -278,8 +303,8 @@ const CHALLENGES: Challenge[] = [
     title: "Full Systems Architecture Lab",
     goal: "Design, connect, and simulate any multi-tier cloud topology. Stress-test under traffic spikes and chaos engineering.",
     hint: "Use the component palette to add nodes. Drag wire endpoints or use Connect Arrow tool to wire them.",
-    initialNodes: DEMO_TEMPLATES[0].nodes,
-    initialConnections: DEMO_TEMPLATES[0].connections,
+    initialNodes: [],
+    initialConnections: [],
     checkSuccess: () => true,
   },
   {
@@ -447,7 +472,18 @@ const CHALLENGES: Challenge[] = [
   },
 ];
 
-type CanvasToolMode = "select" | "connect" | "disconnect";
+type CanvasToolMode = "select" | "pan" | "connect" | "disconnect" | "text";
+type BoardSnap = { nodes: SystemNode[]; connections: Connection[] };
+type Gesture =
+  | { kind: "drag"; id: string; origin: BoardSnap }
+  | { kind: "resize"; id: string; x: number; y: number; w: number; h: number; origin: BoardSnap }
+  | { kind: "pan"; x: number; y: number; left: number; top: number };
+
+let boardSerial = 0;
+function freshBoardId(prefix: string) {
+  boardSerial += 1;
+  return `${prefix}-${boardSerial}`;
+}
 
 export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChallengeId?: string }) {
   const { me, refresh } = useKeel();
@@ -462,8 +498,6 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   const [toolMode, setToolMode] = useState<CanvasToolMode>("select");
   const [connectFromId, setConnectFromId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
   // Simulation State
   const [particles, setParticles] = useState<Particle[]>([]);
@@ -479,7 +513,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   const [xp, setXp] = useState(me?.xp ?? 120);
   const [solvedChallenges, setSolvedChallenges] = useState<string[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
-  const [showTooltips, setShowTooltips] = useState(true);
+  const [showTooltips] = useState(true);
 
   // AI Architect & Guide State
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -493,20 +527,119 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   } | null>(null);
   const [aiQuestion, setAiQuestion] = useState("");
   const [showAiGuide, setShowAiGuide] = useState(true);
+  const [fullPage, setFullPage] = useState(true);
+  const portalReady = useSyncExternalStore(() => () => {}, () => true, () => false);
+  const [zoom, setZoom] = useState(1);
+  const [snap, setSnap] = useState(true);
+  const [wireStyle, setWireStyle] = useState<WireStyle>("curve");
+  const [showRail, setShowRail] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [gesture, setGesture] = useState<Gesture | null>(null);
+  const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
 
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const particleIdRef = useRef(1);
+  const nodesRef = useRef(nodes);
+  const connectionsRef = useRef(connections);
+  const historyRef = useRef<{ past: BoardSnap[]; future: BoardSnap[] }>({ past: [], future: [] });
+  const editRemembered = useRef(false);
+  const zoomRef = useRef(zoom);
+  const snapRef = useRef(snap);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const gestureRef = useRef<Gesture | null>(null);
+  const awardedMissions = useRef(new Set<string>());
+  const commands = useRef({
+    undo: () => {},
+    redo: () => {},
+    copy: () => {},
+    remove: () => {},
+  });
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+    connectionsRef.current = connections;
+    zoomRef.current = zoom;
+    snapRef.current = snap;
+    gestureRef.current = gesture;
+  }, [nodes, connections, zoom, snap, gesture]);
+
+  const boardPoint = useCallback((clientX: number, clientY: number) => {
+    const rect = boardRef.current?.getBoundingClientRect();
+    const scale = zoomRef.current || 1;
+    if (!rect) return { x: 0, y: 0 };
+    return { x: (clientX - rect.left) / scale, y: (clientY - rect.top) / scale };
+  }, []);
+
+  function snapshot(): BoardSnap {
+    return {
+      nodes: nodesRef.current.map((node) => ({ ...node })),
+      connections: connectionsRef.current.map((conn) => ({ ...conn })),
+    };
+  }
+
+  function publishHistory() {
+    setHistoryCounts({
+      past: historyRef.current.past.length,
+      future: historyRef.current.future.length,
+    });
+  }
+
+  function remember() {
+    historyRef.current.past.push(snapshot());
+    if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+    historyRef.current.future = [];
+    publishHistory();
+  }
+
+  function undo() {
+    const prev = historyRef.current.past.pop();
+    if (!prev) return;
+    historyRef.current.future.push(snapshot());
+    nodesRef.current = prev.nodes;
+    connectionsRef.current = prev.connections;
+    setNodes(prev.nodes);
+    setConnections(prev.connections);
+    publishHistory();
+  }
+
+  function redo() {
+    const next = historyRef.current.future.pop();
+    if (!next) return;
+    historyRef.current.past.push(snapshot());
+    nodesRef.current = next.nodes;
+    connectionsRef.current = next.connections;
+    setNodes(next.nodes);
+    setConnections(next.connections);
+    publishHistory();
+  }
+
+  function rememberOnce() {
+    if (editRemembered.current) return;
+    editRemembered.current = true;
+    remember();
+  }
+
+  const canUndo = historyCounts.past > 0;
+  const canRedo = historyCounts.future > 0;
 
   // Switch challenge
   const selectChallenge = (id: ChallengeId) => {
     const ch = CHALLENGES.find((c) => c.id === id);
     if (!ch) return;
+    remember();
+    const nextNodes = JSON.parse(JSON.stringify(ch.initialNodes)) as SystemNode[];
+    const nextConnections = JSON.parse(JSON.stringify(ch.initialConnections)) as Connection[];
+    nodesRef.current = nextNodes;
+    connectionsRef.current = nextConnections;
     setActiveChallenge(id);
-    setNodes(JSON.parse(JSON.stringify(ch.initialNodes)));
-    setConnections(JSON.parse(JSON.stringify(ch.initialConnections)));
+    setNodes(nextNodes);
+    setConnections(nextConnections);
     setSelectedNodeId(null);
     setSelectedConnId(null);
     setConnectFromId(null);
+    setEditingId(null);
     setToast({ message: `Loaded Mission: ${ch.title}`, type: "info" });
   };
 
@@ -514,17 +647,23 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   const loadTemplate = (templateId: string) => {
     const t = DEMO_TEMPLATES.find((tpl) => tpl.id === templateId);
     if (!t) return;
+    remember();
+    const nextNodes = JSON.parse(JSON.stringify(t.nodes)) as SystemNode[];
+    const nextConnections = JSON.parse(JSON.stringify(t.connections)) as Connection[];
+    nodesRef.current = nextNodes;
+    connectionsRef.current = nextConnections;
     setActiveChallenge("freeform");
-    setNodes(JSON.parse(JSON.stringify(t.nodes)));
-    setConnections(JSON.parse(JSON.stringify(t.connections)));
+    setNodes(nextNodes);
+    setConnections(nextConnections);
     setSelectedNodeId(null);
     setSelectedConnId(null);
     setConnectFromId(null);
+    setEditingId(null);
     setToast({ message: t.name, type: "success" });
   };
 
   // Tidy / Auto-Layout Architecture Tool (Places nodes into neat, non-overlapping enterprise tiers)
-  const tidyArchitecture = () => {
+  const tidyArchitecture = (source?: SystemNode[], record = true) => {
     const tierMap: Record<NodeType, number> = {
       client: 0,
       gateway: 1,
@@ -535,18 +674,29 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       queue: 3,
       database: 4,
       telemetry: 5,
+      text: 6,
+      box: 6,
+      ellipse: 6,
+      diamond: 6,
+      cylinder: 6,
+      cloud: 6,
+      note: 6,
     };
 
-    const tiers: Record<number, SystemNode[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
-    for (const node of nodes) {
+    const list = source ?? nodesRef.current;
+    if (record) remember();
+    const tiers: Record<number, SystemNode[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    for (const node of list) {
+      if (isShape(node.type)) continue;
       const tier = tierMap[node.type] ?? 2;
       tiers[tier].push(node);
     }
 
-    const updated = nodes.map((node) => {
+    const updated = list.map((node) => {
+      if (isShape(node.type)) return node;
       const tier = tierMap[node.type] ?? 2;
-      const list = tiers[tier];
-      const indexInTier = list.findIndex((n) => n.id === node.id);
+      const tierList = tiers[tier] ?? [];
+      const indexInTier = tierList.findIndex((n) => n.id === node.id);
 
       if (tier === 5) {
         // Telemetry row at bottom
@@ -562,6 +712,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       return { ...node, x, y };
     });
 
+    nodesRef.current = updated;
     setNodes(updated);
     setToast({ message: "The parts are lined up.", type: "success" });
   };
@@ -694,23 +845,29 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     return () => clearTimeout(timer);
   }, [nodes.length, connections.length, trafficMultiplier, runAiDiagnostic]);
 
-  // Automatic Challenge Progress Evaluation
+  // Mission progress follows the drawing. The award itself is deferred so it is not a render cascade.
   useEffect(() => {
     const current = CHALLENGES.find((c) => c.id === activeChallenge);
     if (!current || activeChallenge === "freeform") return;
-    const isPassing = current.checkSuccess(nodes, connections);
-    if (isPassing && !solvedChallenges.includes(activeChallenge)) {
-      setSolvedChallenges((prev) => [...prev, activeChallenge]);
+    if (solvedChallenges.includes(activeChallenge) || awardedMissions.current.has(activeChallenge)) return;
+    if (!current.checkSuccess(nodes, connections)) return;
+    const missionId = activeChallenge;
+    const title = current.title;
+    const timer = window.setTimeout(() => {
+      if (awardedMissions.current.has(missionId)) return;
+      awardedMissions.current.add(missionId);
+      setSolvedChallenges((prev) => (prev.includes(missionId) ? prev : [...prev, missionId]));
       setXp((prev) => prev + 50);
-      setToast({ message: `Mission Passed! +50 XP: ${current.title}`, type: "success" });
+      setToast({ message: `Mission Passed! +50 XP: ${title}`, type: "success" });
       fetch("/api/foundry/complete", {
         method: "POST",
         headers: { "content-type": "application/json", "x-keel": "1" },
-        body: JSON.stringify({ challengeId: activeChallenge }),
+        body: JSON.stringify({ challengeId: missionId }),
       })
         .then(() => refresh())
         .catch(() => {});
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [nodes, connections, activeChallenge, solvedChallenges, refresh]);
 
   // Particle Generation Loop (Human-trackable live dataflow)
@@ -822,6 +979,98 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     return () => cancelAnimationFrame(animId);
   }, [flowPaused, selectedParticle, hoveredParticle]);
 
+  const applyPointer = useCallback((clientX: number, clientY: number) => {
+    const point = boardPoint(clientX, clientY);
+    setMousePos(point);
+    const act = gestureRef.current;
+    if (!act) return;
+    if (act.kind === "pan") {
+      if (viewportRef.current) {
+        viewportRef.current.scrollLeft = act.left - (clientX - act.x);
+        viewportRef.current.scrollTop = act.top - (clientY - act.y);
+      }
+      return;
+    }
+    if (act.kind === "resize") {
+      let w = Math.max(72, act.w + (point.x - act.x));
+      let h = Math.max(48, act.h + (point.y - act.y));
+      if (snapRef.current) {
+        w = Math.max(72, snapCoord(w));
+        h = Math.max(48, snapCoord(h));
+      }
+      setNodes((prev) => {
+        const next = prev.map((node) => (node.id === act.id ? { ...node, w, h } : node));
+        nodesRef.current = next;
+        return next;
+      });
+      return;
+    }
+    const off = dragOffsetRef.current;
+    let x = Math.max(0, point.x - off.x);
+    let y = Math.max(0, point.y - off.y);
+    if (snapRef.current) {
+      x = Math.max(0, snapCoord(x));
+      y = Math.max(0, snapCoord(y));
+    }
+    setNodes((prev) => {
+      const next = prev.map((node) => (node.id === act.id ? { ...node, x, y } : node));
+      nodesRef.current = next;
+      return next;
+    });
+  }, [boardPoint]);
+
+  const finishGesture = useCallback(() => {
+    const act = gestureRef.current;
+    if (!act) return;
+    gestureRef.current = null;
+    setGesture(null);
+    if (act.kind !== "drag" && act.kind !== "resize") return;
+    const before = act.origin.nodes.find((node) => node.id === act.id);
+    const after = nodesRef.current.find((node) => node.id === act.id);
+    if (!before || !after) return;
+    if (before.x === after.x && before.y === after.y && before.w === after.w && before.h === after.h) return;
+    historyRef.current.past.push(act.origin);
+    if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+    historyRef.current.future = [];
+    setHistoryCounts({
+      past: historyRef.current.past.length,
+      future: historyRef.current.future.length,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!gesture) return;
+    const move = (event: PointerEvent) => applyPointer(event.clientX, event.clientY);
+    const up = () => finishGesture();
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [gesture, applyPointer, finishGesture]);
+
+  useEffect(() => {
+    if (!fullPage) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [fullPage]);
+
+  useEffect(() => {
+    const view = viewportRef.current;
+    if (!view) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setZoom((current) => Math.min(2, Math.max(0.25, current * (event.deltaY > 0 ? 0.9 : 1.1))));
+    };
+    view.addEventListener("wheel", onWheel, { passive: false });
+    return () => view.removeEventListener("wheel", onWheel);
+  }, [fullPage]);
+
   // Connect Nodes helper
   const makeConnection = (fromId: string, toId: string) => {
     if (fromId === toId) return;
@@ -834,13 +1083,18 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       const isDangerous = fromNode?.type === "client" && toNode?.type === "database";
 
       const newConn: Connection = {
-        id: `c-${Date.now()}`,
+        id: freshBoardId("c"),
         from: fromId,
         to: toId,
         status: isDangerous ? "error" : "active",
         protocol: isDangerous ? "DIRECT TCP (VULNERABLE)" : "HTTPS / Dataflow",
+        style: wireStyle,
       };
-      setConnections((prev) => [...prev, newConn]);
+      remember();
+      const next = [...connectionsRef.current, newConn];
+      connectionsRef.current = next;
+      setConnections(next);
+      setSelectedConnId(newConn.id);
       setToast({
         message: isDangerous
           ? "Connected directly to DB! Vulnerability created."
@@ -852,6 +1106,20 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   // Drag & Pointer Handlers
   const handlePointerDown = (id: string, e: React.PointerEvent) => {
+    if (toolMode === "pan" || e.altKey || e.button === 1) {
+      const view = viewportRef.current;
+      if (!view) return;
+      const nextGesture: Gesture = { kind: "pan", x: e.clientX, y: e.clientY, left: view.scrollLeft, top: view.scrollTop };
+      gestureRef.current = nextGesture;
+      setGesture(nextGesture);
+      return;
+    }
+    if (toolMode === "text") {
+      setSelectedNodeId(id);
+      setSelectedConnId(null);
+      setEditingId(id);
+      return;
+    }
     if (toolMode === "connect" || connectFromId) {
       if (connectFromId) {
         if (connectFromId !== id) {
@@ -867,48 +1135,33 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     if (toolMode === "disconnect") {
       const conns = connections.filter((c) => c.from === id || c.to === id);
       if (conns.length > 0) {
-        setConnections((prev) => prev.filter((c) => c.from !== id && c.to !== id));
+        remember();
+        const next = connectionsRef.current.filter((c) => c.from !== id && c.to !== id);
+        connectionsRef.current = next;
+        setConnections(next);
         setToast({ message: "Disconnected wires from node", type: "info" });
       }
       return;
     }
 
     const node = nodes.find((n) => n.id === id);
-    if (!node || !canvasRef.current) return;
+    if (!node) return;
+    const point = boardPoint(e.clientX, e.clientY);
     setSelectedNodeId(id);
     setSelectedConnId(null);
-    setDraggedNodeId(id);
-    const rect = canvasRef.current.getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left - node.x,
-      y: e.clientY - rect.top - node.y,
-    });
+    const offset = { x: point.x - node.x, y: point.y - node.y };
+    dragOffsetRef.current = offset;
+    const nextGesture: Gesture = { kind: "drag", id, origin: snapshot() };
+    gestureRef.current = nextGesture;
+    setGesture(nextGesture);
   };
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const currentMouse = {
-        x: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
-        y: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
-      };
-      setMousePos(currentMouse);
-
-      if (draggedNodeId) {
-        const newX = Math.max(10, Math.min(rect.width - 160, e.clientX - rect.left - dragOffset.x));
-        const newY = Math.max(10, Math.min(rect.height - 110, e.clientY - rect.top - dragOffset.y));
-
-        setNodes((prev) =>
-          prev.map((n) => (n.id === draggedNodeId ? { ...n, x: newX, y: newY } : n))
-        );
-      }
-    },
-    [draggedNodeId, dragOffset]
-  );
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    applyPointer(e.clientX, e.clientY);
+  }, [applyPointer]);
 
   const handlePointerUp = () => {
-    setDraggedNodeId(null);
+    finishGesture();
   };
 
   // Node Port Drag-to-Connect
@@ -926,44 +1179,173 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setConnectFromId(null);
   };
 
+  function visibleOrigin() {
+    const view = viewportRef.current;
+    const board = boardRef.current;
+    const count = nodesRef.current.length;
+    if (!view || !board) return { x: 80 + (count % 4) * 36, y: 80 + (count % 3) * 28 };
+    const boardRect = board.getBoundingClientRect();
+    const viewRect = view.getBoundingClientRect();
+    const scale = zoomRef.current || 1;
+    return {
+      x: Math.max(0, (viewRect.left + 56 - boardRect.left) / scale + (count % 5) * 24),
+      y: Math.max(0, (viewRect.top + 72 - boardRect.top) / scale + (count % 3) * 24),
+    };
+  }
+
   // CRUD: Add Node
-  const addNode = (type: NodeType) => {
+  const addNode = (type: NodeType, at?: { x: number; y: number }) => {
     const meta = nodeTypeMeta[type];
-    const id = `${type}-${Date.now().toString().slice(-4)}`;
+    const spot = at ?? visibleOrigin();
+    const id = freshBoardId(type);
+    const size = nodeSize({ type });
+    const drawing = isShape(type);
     const newNode: SystemNode = {
       id,
       type,
       label: meta.name.split("/")[0].trim(),
-      x: 100 + (nodes.length % 4) * 80,
-      y: 100 + (nodes.length % 3) * 60,
+      x: Math.max(0, spot.x),
+      y: Math.max(0, spot.y),
+      w: drawing ? size.w : undefined,
+      h: drawing ? size.h : undefined,
+      z: nodesRef.current.length + 1,
       health: "healthy",
       latency: type === "cache" ? 2 : type === "database" ? 45 : 20,
       capacity: type === "gateway" ? 5000 : 1000,
-      rps: 50,
-      role: meta.desc,
-      industryTool: meta.tool,
+      rps: drawing ? 0 : 50,
+      role: drawing ? "" : meta.desc,
+      industryTool: drawing ? "" : meta.tool,
     };
-    setNodes((prev) => [...prev, newNode]);
+    remember();
+    const next = [...nodesRef.current, newNode];
+    nodesRef.current = next;
+    setNodes(next);
     setSelectedNodeId(id);
     setSelectedConnId(null);
+    if (type === "text") setEditingId(id);
     setToast({ message: `Added ${meta.name}`, type: "success" });
   };
+
+  function startResize(id: string, event: React.PointerEvent) {
+    event.stopPropagation();
+    event.preventDefault();
+    const node = nodesRef.current.find((item) => item.id === id);
+    if (!node) return;
+    const size = nodeSize(node);
+    const point = boardPoint(event.clientX, event.clientY);
+    const nextGesture: Gesture = { kind: "resize", id, x: point.x, y: point.y, w: size.w, h: size.h, origin: snapshot() };
+    gestureRef.current = nextGesture;
+    setGesture(nextGesture);
+  }
+
+  function onBackgroundPointerDown(event: React.PointerEvent) {
+    if (toolMode === "pan" || event.button === 1 || event.altKey) {
+      const view = viewportRef.current;
+      if (!view) return;
+      const nextGesture: Gesture = { kind: "pan", x: event.clientX, y: event.clientY, left: view.scrollLeft, top: view.scrollTop };
+      gestureRef.current = nextGesture;
+      setGesture(nextGesture);
+      return;
+    }
+    if (toolMode === "text") {
+      addNode("text", boardPoint(event.clientX, event.clientY));
+      return;
+    }
+    setSelectedNodeId(null);
+    setSelectedConnId(null);
+    setConnectFromId(null);
+    setEditingId(null);
+  }
 
   // CRUD: Delete Node
   const deleteSelectedNode = () => {
     if (!selectedNodeId) return;
-    setNodes((prev) => prev.filter((n) => n.id !== selectedNodeId));
-    setConnections((prev) => prev.filter((c) => c.from !== selectedNodeId && c.to !== selectedNodeId));
+    remember();
+    const nextNodes = nodesRef.current.filter((n) => n.id !== selectedNodeId);
+    const nextConnections = connectionsRef.current.filter((c) => c.from !== selectedNodeId && c.to !== selectedNodeId);
+    nodesRef.current = nextNodes;
+    connectionsRef.current = nextConnections;
+    setNodes(nextNodes);
+    setConnections(nextConnections);
     setSelectedNodeId(null);
+    setEditingId(null);
     setToast({ message: "Node deleted", type: "info" });
   };
+
+  function deleteSelection() {
+    if (selectedNodeId) {
+      deleteSelectedNode();
+      return;
+    }
+    if (!selectedConnId) return;
+    remember();
+    const next = connectionsRef.current.filter((conn) => conn.id !== selectedConnId);
+    connectionsRef.current = next;
+    setConnections(next);
+    setSelectedConnId(null);
+    setToast({ message: "Connection removed", type: "info" });
+  }
+
+  function duplicateSelected() {
+    const source = nodesRef.current.find((node) => node.id === selectedNodeId);
+    if (!source) return;
+    remember();
+    const copy: SystemNode = {
+      ...source,
+      id: freshBoardId(source.type),
+      x: source.x + 28,
+      y: source.y + 28,
+      z: (source.z ?? 0) + 1,
+      label: source.label,
+    };
+    const next = [...nodesRef.current, copy];
+    nodesRef.current = next;
+    setNodes(next);
+    setSelectedNodeId(copy.id);
+  }
+
+  function orderSelected(direction: "front" | "back") {
+    if (!selectedNodeId) return;
+    remember();
+    setNodes((prev) => {
+      const levels = prev.map((node) => node.z ?? 0);
+      const nextZ = direction === "front" ? Math.max(...levels, 0) + 1 : Math.min(...levels, 0) - 1;
+      const next = prev.map((node) => (node.id === selectedNodeId ? { ...node, z: nextZ } : node));
+      nodesRef.current = next;
+      return next;
+    });
+  }
+
+  function chooseWire(style: WireStyle) {
+    setWireStyle(style);
+    if (!selectedConnId) return;
+    remember();
+    const next = connectionsRef.current.map((conn) => (conn.id === selectedConnId ? { ...conn, style } : conn));
+    connectionsRef.current = next;
+    setConnections(next);
+  }
+
+  function zoomBy(factor: number) {
+    setZoom((current) => Math.min(2, Math.max(0.25, Math.round(current * factor * 100) / 100)));
+  }
+
+  function fitView() {
+    const view = viewportRef.current;
+    if (!view) return;
+    const ext = boardExtent(nodesRef.current);
+    const next = Math.min(1.5, Math.max(0.25, Math.min((view.clientWidth - 32) / ext.w, (view.clientHeight - 32) / ext.h)));
+    setZoom(Number.isFinite(next) && next > 0 ? next : 1);
+    view.scrollTo({ left: 0, top: 0 });
+  }
 
   // CRUD: Update Node
   const updateSelectedNode = (field: keyof SystemNode, value: unknown) => {
     if (!selectedNodeId) return;
-    setNodes((prev) =>
-      prev.map((n) => (n.id === selectedNodeId ? { ...n, [field]: value } : n))
-    );
+    setNodes((prev) => {
+      const next = prev.map((n) => (n.id === selectedNodeId ? { ...n, [field]: value } : n));
+      nodesRef.current = next;
+      return next;
+    });
   };
 
   // Auto-Fix via AI Guide (Applies recommended architecture)
@@ -976,13 +1358,13 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     });
 
     let currentNodes = [...nodes];
-    let newConns = [...cleanConns];
+    const newConns = [...cleanConns];
 
     // Ensure Auth Guard exists
     let authNode = currentNodes.find((n) => n.type === "auth" || n.type === "gateway");
     if (!authNode) {
       authNode = {
-        id: `auth-${Date.now()}`,
+        id: freshBoardId("auth"),
         type: "auth",
         label: "Better Auth Guard",
         x: 250,
@@ -1001,7 +1383,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     let computeNode = currentNodes.find((n) => n.type === "compute");
     if (!computeNode) {
       computeNode = {
-        id: `compute-${Date.now()}`,
+        id: freshBoardId("compute"),
         type: "compute",
         label: "App Logic Server",
         x: 470,
@@ -1025,29 +1407,31 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
     if (clientNode && authNode) {
       if (!newConns.some((c) => c.from === clientNode.id && c.to === authNode.id)) {
-        newConns.push({ id: `c-fix-1-${Date.now()}`, from: clientNode.id, to: authNode.id, status: "active", protocol: "HTTPS / TLS" });
+        newConns.push({ id: freshBoardId("c-fix-1"), from: clientNode.id, to: authNode.id, status: "active", protocol: "HTTPS / TLS" });
       }
     }
     if (authNode && computeNode) {
       if (!newConns.some((c) => c.from === authNode.id && c.to === computeNode.id)) {
-        newConns.push({ id: `c-fix-2-${Date.now()}`, from: authNode.id, to: computeNode.id, status: "active", protocol: "Verified Token" });
+        newConns.push({ id: freshBoardId("c-fix-2"), from: authNode.id, to: computeNode.id, status: "active", protocol: "Verified Token" });
       }
     }
     if (computeNode && dbNode) {
       if (!newConns.some((c) => c.from === computeNode.id && c.to === dbNode.id)) {
-        newConns.push({ id: `c-fix-3-${Date.now()}`, from: computeNode.id, to: dbNode.id, status: "active", protocol: "SQL Connection Pool" });
+        newConns.push({ id: freshBoardId("c-fix-3"), from: computeNode.id, to: dbNode.id, status: "active", protocol: "SQL Connection Pool" });
       }
     }
 
-    setNodes(currentNodes);
+    remember();
+    nodesRef.current = currentNodes;
+    connectionsRef.current = newConns;
     setConnections(newConns);
-    tidyArchitecture();
+    tidyArchitecture(currentNodes, false);
     setToast({ message: "Applied Recommended Architecture: Security boundary and middle tier restored.", type: "success" });
   };
 
   // Chaos: Simulate Node Outage (Fault Injection)
   const triggerChaos = () => {
-    const aliveNodes = nodes.filter((n) => n.health !== "down" && n.type !== "client");
+    const aliveNodes = nodes.filter((n) => n.health !== "down" && n.type !== "client" && !isShape(n.type));
     if (aliveNodes.length === 0) return;
     const target = aliveNodes[Math.floor(Math.random() * aliveNodes.length)];
     setNodes((prev) =>
@@ -1082,13 +1466,130 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   // Clear Canvas
   const clearCanvas = () => {
+    remember();
+    nodesRef.current = [];
+    connectionsRef.current = [];
     setNodes([]);
     setConnections([]);
     setSelectedNodeId(null);
     setSelectedConnId(null);
     setConnectFromId(null);
+    setEditingId(null);
+    setParticles([]);
     setToast({ message: "Canvas cleared", type: "info" });
   };
+
+  function blankCanvas() {
+    remember();
+    nodesRef.current = [];
+    connectionsRef.current = [];
+    setActiveChallenge("freeform");
+    setNodes([]);
+    setConnections([]);
+    setSelectedNodeId(null);
+    setSelectedConnId(null);
+    setConnectFromId(null);
+    setEditingId(null);
+    setParticles([]);
+    setToast({ message: "Blank canvas", type: "info" });
+  }
+
+  function openDrawing(file: File) {
+    file.text().then((text) => {
+      const data = JSON.parse(text) as { nodes?: unknown; connections?: unknown };
+      if (!Array.isArray(data.nodes)) throw new Error("nodes");
+      const nextNodes: SystemNode[] = [];
+      for (const item of data.nodes) {
+        if (!item || typeof item !== "object") continue;
+        const raw = item as Partial<SystemNode>;
+        if (typeof raw.id !== "string" || typeof raw.type !== "string" || !nodeTypeMeta[raw.type as NodeType]) continue;
+        if (typeof raw.x !== "number" || typeof raw.y !== "number") continue;
+        const type = raw.type as NodeType;
+        nextNodes.push({
+          id: raw.id,
+          type,
+          label: typeof raw.label === "string" ? raw.label : nodeTypeMeta[type].name,
+          x: raw.x,
+          y: raw.y,
+          w: typeof raw.w === "number" ? raw.w : undefined,
+          h: typeof raw.h === "number" ? raw.h : undefined,
+          z: typeof raw.z === "number" ? raw.z : undefined,
+          health: raw.health === "down" || raw.health === "degraded" ? raw.health : "healthy",
+          latency: typeof raw.latency === "number" ? raw.latency : 20,
+          capacity: typeof raw.capacity === "number" ? raw.capacity : 1000,
+          rps: typeof raw.rps === "number" ? raw.rps : 0,
+          role: typeof raw.role === "string" ? raw.role : "",
+          industryTool: typeof raw.industryTool === "string" ? raw.industryTool : "",
+        });
+      }
+      const ids = new Set(nextNodes.map((node) => node.id));
+      const nextConnections: Connection[] = [];
+      if (Array.isArray(data.connections)) {
+        for (const item of data.connections) {
+          if (!item || typeof item !== "object") continue;
+          const raw = item as Partial<Connection> & { source?: string; target?: string };
+          const from = typeof raw.from === "string" ? raw.from : raw.source;
+          const to = typeof raw.to === "string" ? raw.to : raw.target;
+          if (!from || !to || !ids.has(from) || !ids.has(to)) continue;
+          nextConnections.push({
+            id: typeof raw.id === "string" ? raw.id : `c-${from}-${to}`,
+            from,
+            to,
+            status: raw.status === "error" ? "error" : "active",
+            protocol: typeof raw.protocol === "string" ? raw.protocol : undefined,
+            style: raw.style === "elbow" || raw.style === "straight" || raw.style === "curve" ? raw.style : undefined,
+          });
+        }
+      }
+      remember();
+      nodesRef.current = nextNodes;
+      connectionsRef.current = nextConnections;
+      setActiveChallenge("freeform");
+      setNodes(nextNodes);
+      setConnections(nextConnections);
+      setSelectedNodeId(null);
+      setSelectedConnId(null);
+      setToast({ message: "Drawing opened", type: "success" });
+    }).catch(() => setToast({ message: "That file is not a Foundry drawing. Open a JSON file saved from this lab.", type: "error" }));
+  }
+
+  useEffect(() => {
+    commands.current = { undo, redo, copy: duplicateSelected, remove: deleteSelection };
+  });
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+      const key = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) commands.current.redo();
+        else commands.current.undo();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && key === "y") {
+        event.preventDefault();
+        commands.current.redo();
+        return;
+      }
+      if (typing) return;
+      if ((event.metaKey || event.ctrlKey) && key === "d") {
+        event.preventDefault();
+        commands.current.copy();
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        if (!nodesRef.current.length && !connectionsRef.current.length) return;
+        event.preventDefault();
+        commands.current.remove();
+      } else if (event.key === "Escape") {
+        setToolMode("select");
+        setConnectFromId(null);
+        setEditingId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Export Topology
   const exportTopology = () => {
@@ -1099,13 +1600,29 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
         id: n.id,
         type: n.type,
         label: n.label,
+        x: n.x,
+        y: n.y,
+        w: n.w,
+        h: n.h,
+        z: n.z,
+        health: n.health,
+        role: n.role,
+        industryTool: n.industryTool,
         industryEquivalent: n.industryTool,
         latencyMs: n.latency,
+        latency: n.latency,
+        capacity: n.capacity,
         capacityRps: n.capacity,
+        rps: n.rps,
       })),
       connections: connections.map((c) => ({
+        id: c.id,
+        from: c.from,
+        to: c.to,
         source: c.from,
         target: c.to,
+        status: c.status,
+        style: c.style,
         protocol: c.protocol || "HTTPS",
       })),
     };
@@ -1159,21 +1676,23 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   };
 
   // Compute live system stats
-  const healthyCount = nodes.filter((n) => n.health === "healthy").length;
-  const availability = nodes.length ? Math.round((healthyCount / nodes.length) * 100) : 100;
-  const avgLatency = nodes.length ? Math.round(nodes.reduce((acc, n) => acc + (n.health === "down" ? 500 : n.latency), 0) / nodes.length) : 0;
+  const measured = nodes.filter((n) => !isShape(n.type));
+  const healthyCount = measured.filter((n) => n.health === "healthy").length;
+  const availability = measured.length ? Math.round((healthyCount / measured.length) * 100) : 100;
+  const avgLatency = measured.length ? Math.round(measured.reduce((acc, n) => acc + (n.health === "down" ? 500 : n.latency), 0) / measured.length) : 0;
+  const extent = boardExtent(nodes);
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedConn = connections.find((c) => c.id === selectedConnId);
   const currentCh = CHALLENGES.find((c) => c.id === activeChallenge) || CHALLENGES[0];
   const connectSourceNode = nodes.find((n) => n.id === connectFromId);
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+  const lab = (
+    <div data-foundry-root="" className={fullPage ? "fixed inset-0 z-40 flex flex-col overflow-hidden bg-paper" : "mx-auto max-w-7xl px-4 py-8"}>
       {/* Toast Notification */}
       {toast && (
         <div
           role="status"
-          className="fixed bottom-24 right-6 z-40 flex items-center gap-3 rounded-lg border border-line bg-raised px-4 py-3 shadow-xl transition-all"
+          className="fixed bottom-24 right-6 z-[60] flex items-center gap-3 rounded-lg border border-line bg-raised px-4 py-3 shadow-xl transition-all"
         >
           <span className="text-base font-bold">
             {toast.type === "success" ? <IconCheck size={16} className="text-good" /> : toast.type === "error" ? <IconChaos size={16} className="text-danger" /> : <IconArchitect size={16} className="text-copper" />}
@@ -1190,7 +1709,8 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       )}
 
       {/* Header & Academic Lineage */}
-      <section className="rounded-xl border border-line bg-raised p-5 shadow-xs">
+      <section className={fullPage ? "shrink-0 border-b border-line bg-paper px-3 py-2" : "rounded-xl border border-line bg-raised p-5 shadow-xs"}>
+        {!fullPage && (<>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="kicker">DevOps & Systems Engineering Foundry</p>
@@ -1240,9 +1760,11 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             <p className="mt-1 text-xs text-soft">Observability, MTTD/MTTR, SLA/SLO, chaos recovery.</p>
           </div>
         </div>
+        </>)}
 
         {/* Missions Selector */}
-        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+        <div className={`${fullPage ? "flex max-h-14 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto md:max-h-none md:flex-wrap md:overflow-visible" : "mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4"}`}>
+          {fullPage && <h1 className="text-sm font-bold text-ink">Foundry</h1>}
           <span className="text-xs font-bold text-soft uppercase tracking-wider">Missions:</span>
           {CHALLENGES.map((ch) => {
             const isSolved = solvedChallenges.includes(ch.id);
@@ -1251,7 +1773,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               <button
                 key={ch.id}
                 onClick={() => selectChallenge(ch.id)}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all shadow-xs ${
+                className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-xs transition-all ${
                   isActive
                     ? "border-copper bg-copper text-raised shadow-xs"
                     : "border-line bg-paper text-ink hover:border-copper hover:bg-raised"
@@ -1267,7 +1789,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       </section>
 
       {/* Mission Objective Bar */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-raised px-4 py-3 text-sm shadow-xs">
+      {!fullPage && <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-raised px-4 py-3 text-sm shadow-xs">
         <div className="flex items-center gap-3">
           <span className="rounded bg-paper border border-line px-2 py-0.5 text-xs font-mono font-bold text-copper">
             {currentCh.badge}
@@ -1288,18 +1810,18 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             <span>{showAiGuide ? "Hide AI Architect" : "Show AI Architect"}</span>
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Main Studio Area */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
+      <div className={fullPage ? "relative flex min-h-0 flex-1 flex-col" : "relative mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4"}>
         {/* Left Sidebar: Component Palette & Control Panel */}
-        <div className="space-y-4 lg:col-span-1">
+        <div className={fullPage ? (showRail ? "absolute start-3 top-16 z-30 max-h-[calc(100%-5rem)] w-72 space-y-4 overflow-auto" : "hidden") : "space-y-4 lg:col-span-1"}>
           {/* Architecture Toolbox with Premium Vector Icons */}
           <div className="rounded-xl border border-line bg-raised p-4 shadow-xs">
             <h2 className="text-xs font-bold uppercase tracking-wider text-ink">Architecture Toolbox</h2>
             <p className="mt-1 text-xs text-soft">Click to spawn enterprise nodes into the canvas.</p>
             <div className="mt-3 space-y-1.5">
-              {(Object.keys(nodeTypeMeta) as NodeType[]).map((type) => {
+              {SERVICE_TYPES.map((type) => {
                 const meta = nodeTypeMeta[type];
                 const NodeIcon = meta.Icon;
                 return (
@@ -1447,11 +1969,11 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
         </div>
 
         {/* Center / Right: Interactive Canvas & Toolbar */}
-        <div className="flex flex-col gap-4 lg:col-span-3">
+        <div className={fullPage ? "flex min-h-0 flex-1 flex-col gap-2 p-2" : "flex flex-col gap-4 lg:col-span-3"}>
           {/* Canvas Enterprise Toolbar with Precision Vector Icons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-raised px-4 py-2.5 shadow-xs">
+          <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-raised px-3 py-2 shadow-xs ${fullPage ? "max-h-40 overflow-y-auto md:max-h-none md:overflow-visible" : ""}`}>
             {/* Interactive Modes */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => { setToolMode("select"); setConnectFromId(null); }}
                 className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
@@ -1489,7 +2011,60 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               </button>
 
               <button
-                onClick={tidyArchitecture}
+                type="button"
+                onClick={() => { setToolMode("pan"); setConnectFromId(null); }}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                  toolMode === "pan"
+                    ? "border-copper bg-copper text-raised shadow-xs"
+                    : "border-line bg-paper text-ink hover:border-copper"
+                }`}
+              >
+                <span>Hand</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setToolMode("text"); setConnectFromId(null); }}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                  toolMode === "text"
+                    ? "border-copper bg-copper text-raised shadow-xs"
+                    : "border-line bg-paper text-ink hover:border-copper"
+                }`}
+              >
+                <span>Text</span>
+              </button>
+
+              {DRAW_TYPES.filter((type) => type !== "text").map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => addNode(type)}
+                  className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper"
+                >
+                  {nodeTypeMeta[type].name}
+                </button>
+              ))}
+
+              <button type="button" onClick={undo} disabled={!canUndo} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper disabled:opacity-40">Undo</button>
+              <button type="button" onClick={redo} disabled={!canRedo} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper disabled:opacity-40">Redo</button>
+              <button type="button" onClick={duplicateSelected} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Copy</button>
+              <button type="button" onClick={deleteSelection} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-danger hover:text-danger">Delete</button>
+              <button type="button" aria-pressed={snap} onClick={() => setSnap((value) => !value)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${snap ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Snap</button>
+              <button type="button" onClick={() => orderSelected("front")} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Front</button>
+              <button type="button" onClick={() => orderSelected("back")} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Back</button>
+              <label className="sr-only" htmlFor="wire-style">Connector style</label>
+              <select id="wire-style" aria-label="Connector style" value={selectedConn ? wireStyleOf(selectedConn.style) : wireStyle} onChange={(e) => chooseWire(e.target.value as WireStyle)} className="rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink">
+                <option value="curve">Curve</option>
+                <option value="elbow">Elbow</option>
+                <option value="straight">Straight</option>
+              </select>
+              <button type="button" onClick={() => zoomBy(1 / 0.9)} className="rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink" aria-label="Zoom in">+</button>
+              <button type="button" onClick={() => setZoom(1)} className="rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink">{Math.round(zoom * 100)}%</button>
+              <button type="button" onClick={() => zoomBy(0.9)} className="rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink" aria-label="Zoom out">−</button>
+              <button type="button" onClick={fitView} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Fit</button>
+
+              <button
+                onClick={() => tidyArchitecture()}
                 className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-3 py-1.5 text-xs font-semibold text-ink hover:border-copper transition-all shadow-xs"
                 title="Automatically organize nodes into clean, non-overlapping architectural tiers"
               >
@@ -1499,7 +2074,23 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             </div>
 
             {/* Template Selector Dropdown */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="add-part" className="sr-only">Add a part</label>
+              <select
+                id="add-part"
+                aria-label="Add a part"
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  addNode(e.target.value as NodeType);
+                }}
+                className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink shadow-xs"
+              >
+                <option value="">Add a part</option>
+                {SERVICE_TYPES.map((type) => (
+                  <option key={type} value={type}>{nodeTypeMeta[type].name.split("/")[0]}</option>
+                ))}
+              </select>
               <label htmlFor="tpl-select" className="text-xs font-bold text-soft uppercase tracking-wider hidden sm:inline">
                 Template:
               </label>
@@ -1524,6 +2115,26 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               >
                 <IconClear size={14} />
                 <span>Clear</span>
+              </button>
+              <button type="button" onClick={blankCanvas} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Blank canvas</button>
+              <button type="button" onClick={() => fileRef.current?.click()} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Open</button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                aria-label="Open a Foundry drawing"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) openDrawing(file);
+                }}
+              />
+              {fullPage && (
+                <button type="button" onClick={() => setShowRail((value) => !value)} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper" aria-pressed={showRail}>Parts</button>
+              )}
+              <button type="button" onClick={() => { setFullPage((value) => !value); setShowRail(false); }} className="rounded-lg border border-copper bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-copper hover:text-raised">
+                {fullPage ? "Exit full page" : "Full page"}
               </button>
             </div>
           </div>
@@ -1562,19 +2173,10 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             </div>
           )}
 
-          {/* Interactive 2D/3D Canvas */}
-          <div
-            ref={canvasRef}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            className="relative h-[580px] w-full select-none overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 shadow-inner"
-            style={{
-              backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0)`,
-              backgroundSize: "28px 28px",
-            }}
-          >
+          {/* Interactive canvas. The frame stays on screen. The board inside it scrolls and grows. */}
+          <div className={`relative w-full rounded-xl border border-zinc-700 bg-zinc-950 shadow-inner ${fullPage ? "min-h-0 flex-1" : "h-[calc(100dvh-9rem)] min-h-[36rem]"}`}>
             {/* Canvas Header Legend & Speed / Flow Controls */}
-            <div className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/75 px-3 py-1.5 backdrop-blur-md">
+            <div className="absolute left-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/75 px-3 py-1.5 backdrop-blur-md">
               <span className={`h-2 w-2 rounded-full ${flowPaused || selectedParticle ? "bg-amber-400" : "bg-emerald-400 animate-pulse"}`} />
               <span className="text-xs font-mono text-zinc-200 font-semibold">
                 {flowPaused || selectedParticle ? "Flow Frozen" : "Live Dataflow"}
@@ -1625,8 +2227,29 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               </button>
             </div>
 
+            <div
+              ref={viewportRef}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className={`absolute inset-0 z-0 overflow-auto ${toolMode === "pan" ? "cursor-grab" : ""}`}
+            >
+              <div style={{ width: extent.w * zoom, height: extent.h * zoom }}>
+                <div
+                  ref={boardRef}
+                  className="relative"
+                  style={{
+                    width: extent.w,
+                    height: extent.h,
+                    transform: `scale(${zoom})`,
+                    transformOrigin: "0 0",
+                    backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0)",
+                    backgroundSize: "28px 28px",
+                  }}
+                >
+
             {/* SVG Directional Connections Layer */}
             <svg className="absolute inset-0 h-full w-full pointer-events-auto">
+              <rect width="100%" height="100%" fill="transparent" onPointerDown={onBackgroundPointerDown} />
               <defs>
                 {/* Directional Arrowheads */}
                 <marker
@@ -1679,15 +2302,15 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 const toNode = nodes.find((n) => n.id === conn.to);
                 if (!fromNode || !toNode) return null;
 
-                const x1 = fromNode.x + 144;
-                const y1 = fromNode.y + 44;
-                const x2 = toNode.x;
-                const y2 = toNode.y + 44;
+                const fromPort = anchors(fromNode).out;
+                const toPort = anchors(toNode).inn;
+                const x1 = fromPort.x;
+                const y1 = fromPort.y;
+                const x2 = toPort.x;
+                const y2 = toPort.y;
                 const isError = conn.status === "error" || fromNode.health === "down" || toNode.health === "down";
                 const isSelected = selectedConnId === conn.id;
-
-                const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
-                const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+                const pathD = wirePath(x1, y1, x2, y2, wireStyleOf(conn.style));
 
                 return (
                   <g
@@ -1696,7 +2319,10 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     onClick={(e) => {
                       e.stopPropagation();
                       if (toolMode === "disconnect") {
-                        setConnections((prev) => prev.filter((c) => c.id !== conn.id));
+                        remember();
+                        const next = connectionsRef.current.filter((c) => c.id !== conn.id);
+                        connectionsRef.current = next;
+                        setConnections(next);
                         setToast({ message: "Connection severed", type: "info" });
                       } else {
                         setSelectedConnId(conn.id);
@@ -1727,7 +2353,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               {/* Temporary live wire following mouse when drawing connection */}
               {connectFromId && connectSourceNode && (
                 <path
-                  d={`M ${connectSourceNode.x + 144} ${connectSourceNode.y + 44} C ${connectSourceNode.x + 180} ${connectSourceNode.y + 44}, ${mousePos.x - 40} ${mousePos.y}, ${mousePos.x} ${mousePos.y}`}
+                  d={wirePath(anchors(connectSourceNode).out.x, anchors(connectSourceNode).out.y, mousePos.x, mousePos.y, wireStyle)}
                   fill="none"
                   stroke="#d08968"
                   strokeWidth="2.5"
@@ -1745,23 +2371,11 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 const toNode = nodes.find((n) => n.id === conn.to);
                 if (!fromNode || !toNode) return null;
 
-                const x1 = fromNode.x + 144;
-                const y1 = fromNode.y + 44;
-                const x2 = toNode.x;
-                const y2 = toNode.y + 44;
-                const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
-
-                const t = p.progress;
-                const cx =
-                  (1 - t) * (1 - t) * (1 - t) * x1 +
-                  3 * (1 - t) * (1 - t) * t * (x1 + dx) +
-                  3 * (1 - t) * t * t * (x2 - dx) +
-                  t * t * t * x2;
-                const cy =
-                  (1 - t) * (1 - t) * (1 - t) * y1 +
-                  3 * (1 - t) * (1 - t) * t * y1 +
-                  3 * (1 - t) * t * t * y2 +
-                  t * t * t * y2;
+                const fromPort = anchors(fromNode).out;
+                const toPort = anchors(toNode).inn;
+                const spot = pointOnWire(fromPort.x, fromPort.y, toPort.x, toPort.y, p.progress, wireStyleOf(conn.style));
+                const cx = spot.x;
+                const cy = spot.y;
 
                 const color =
                   p.type === "cache_hit"
@@ -1853,78 +2467,141 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             </svg>
 
             {/* Interactive Drag & Drop Nodes with Vector Icons */}
-            {nodes.map((node) => {
+            {[...nodes].sort((a, b) => (a.z ?? 0) - (b.z ?? 0)).map((node) => {
               const meta = nodeTypeMeta[node.type];
               const NodeIcon = meta.Icon;
               const isSelected = selectedNodeId === node.id;
               const isDown = node.health === "down";
               const isDegraded = node.health === "degraded";
               const isConnectSource = connectFromId === node.id;
+              const drawing = isShape(node.type);
+              const size = nodeSize(node);
+              const shapeClass = node.type === "ellipse" || node.type === "cylinder"
+                ? "rounded-full"
+                : node.type === "cloud"
+                  ? "rounded-[2rem]"
+                  : node.type === "note"
+                    ? "rounded-sm bg-amber-100 text-zinc-900"
+                    : node.type === "text" || node.type === "diamond"
+                      ? "border-transparent bg-transparent shadow-none"
+                      : "rounded-xl";
 
               return (
                 <div
                   key={node.id}
                   onPointerDown={(e) => handlePointerDown(node.id, e)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingId(node.id);
+                  }}
                   style={{
                     transform: `translate3d(${node.x}px, ${node.y}px, 0)`,
+                    width: size.w,
+                    height: node.h || drawing ? size.h : undefined,
+                    zIndex: 10 + (node.z ?? 0),
                   }}
-                  className={`absolute z-10 flex w-36 cursor-grab flex-col rounded-xl border p-2.5 shadow-xl backdrop-blur-md transition-shadow active:cursor-grabbing ${
-                    isConnectSource
-                      ? "border-amber-400 ring-2 ring-amber-400/60 bg-zinc-900 text-zinc-100"
-                      : isSelected
-                        ? "border-copper ring-2 ring-copper/60 bg-zinc-900 text-zinc-100 shadow-copper/20"
-                        : isDown
-                          ? "border-rose-600 bg-rose-950/90 text-rose-100"
-                          : isDegraded
-                            ? "border-amber-500 bg-amber-950/90 text-amber-100"
-                            : "border-zinc-700/80 bg-zinc-900/95 text-zinc-100 hover:border-zinc-500"
+                  className={`absolute flex cursor-grab flex-col border p-2.5 active:cursor-grabbing ${
+                    node.type === "text" || node.type === "diamond"
+                      ? shapeClass
+                      : `${shapeClass} shadow-xl ${
+                        node.type === "note"
+                          ? ""
+                          : isConnectSource
+                            ? "border-amber-400 ring-2 ring-amber-400/60 bg-zinc-900 text-zinc-100"
+                            : isSelected
+                              ? "border-copper ring-2 ring-copper/60 bg-zinc-900 text-zinc-100"
+                              : isDown
+                                ? "border-rose-600 bg-rose-950/90 text-rose-100"
+                                : isDegraded
+                                  ? "border-amber-500 bg-amber-950/90 text-amber-100"
+                                  : drawing
+                                    ? "border-zinc-600 bg-zinc-900/90 text-zinc-100"
+                                    : "border-zinc-700/80 bg-zinc-900/95 text-zinc-100 hover:border-zinc-500"
+                      }`
                   }`}
                 >
-                  {/* Left Input Port */}
+                  {node.type === "diamond" && (
+                    <div
+                      className={`pointer-events-none absolute inset-0 ${isSelected ? "bg-zinc-800" : "bg-zinc-900"}`}
+                      style={{ clipPath: "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)" }}
+                    />
+                  )}
                   <div
                     onClick={(e) => endPortConnect(node.id, e)}
-                    title="Input Port: Click to connect wire here"
-                    className="absolute -left-2 top-9 h-4 w-4 rounded-full border-2 border-zinc-900 bg-zinc-400 hover:bg-emerald-400 hover:scale-125 transition-transform cursor-pointer"
+                    title="Input"
+                    className="absolute -left-2 top-1/2 z-20 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-zinc-900 bg-zinc-400 hover:bg-emerald-400 hover:scale-125 transition-transform cursor-pointer"
                   />
-
-                  {/* Right Output Port */}
                   <div
                     onClick={(e) => startPortConnect(node.id, e)}
-                    title="Output Port: Click to draw arrow out"
-                    className="absolute -right-2 top-9 h-4 w-4 rounded-full border-2 border-zinc-900 bg-zinc-400 hover:bg-copper hover:scale-125 transition-transform cursor-pointer"
+                    title="Output"
+                    className="absolute -right-2 top-1/2 z-20 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-zinc-900 bg-zinc-400 hover:bg-copper hover:scale-125 transition-transform cursor-pointer"
                   />
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-300">
-                      <NodeIcon size={18} />
-                    </span>
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        isDown
-                          ? "bg-rose-500 animate-ping"
-                          : isDegraded
-                            ? "bg-amber-400"
-                            : "bg-emerald-400"
-                      }`}
-                    />
-                  </div>
-
-                  <NodeWords label={node.label} role={node.role} tool={node.industryTool} type={node.type} />
-                  <p className="truncate text-[10px] text-zinc-400"><NodeWords label={meta.name.split("/")[0] ?? ""} role="" tool="" type="" bare /></p>
-
-                  <div className="mt-2 flex items-center justify-between border-t border-zinc-700/60 pt-1.5 text-[9px] text-zinc-400">
-                    <span className="font-mono text-zinc-300"><NodeWords bare label={`${node.latency} ms`} role="" tool="" type="" /></span>
-                    <span className="font-mono text-zinc-300"><NodeWords bare label={`${node.rps} rps`} role="" tool="" type="" /></span>
-                  </div>
-
-                  {showTooltips && (
-                    <div className="mt-1 rounded bg-black/60 px-1 py-0.5 text-center font-mono text-[8px] text-zinc-400 truncate">
-                      <NodeWords label={node.industryTool.split("/")[0] ?? ""} role="" tool="" type="" bare />
+                  {node.type !== "text" && (
+                    <div className="relative z-10 flex items-center justify-between">
+                      <span className={node.type === "note" ? "text-zinc-800" : "text-zinc-300"}>
+                        <NodeIcon size={18} />
+                      </span>
+                      {!drawing || node.health !== "healthy" ? (
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            isDown ? "bg-rose-500 animate-ping" : isDegraded ? "bg-amber-400" : "bg-emerald-400"
+                          }`}
+                        />
+                      ) : <span />}
                     </div>
+                  )}
+
+                  {editingId === node.id ? (
+                    <input
+                      autoFocus
+                      aria-label="Name"
+                      value={node.label}
+                      onFocus={rememberOnce}
+                      onBlur={() => {
+                        editRemembered.current = false;
+                        setEditingId(null);
+                      }}
+                      onChange={(e) => updateSelectedNode("label", e.target.value)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === "Escape") setEditingId(null);
+                      }}
+                      className="relative z-10 mt-1 w-full bg-transparent text-xs font-bold text-inherit outline-none"
+                    />
+                  ) : (
+                    <div className={`relative z-10 ${node.type === "note" ? "[&_p]:text-zinc-900" : ""}`}>
+                      <NodeWords label={node.label} role={node.role} tool={drawing ? "" : node.industryTool} type={node.type} />
+                    </div>
+                  )}
+
+                  {!drawing && (
+                    <div className="relative z-10 mt-2 flex items-center justify-between gap-2 border-t border-zinc-700/60 pt-1.5 text-[9px] text-zinc-300">
+                      <span className="truncate font-mono">{node.latency} ms</span>
+                      <span className="truncate font-mono">{node.rps} rps</span>
+                    </div>
+                  )}
+
+                  {showTooltips && !drawing && node.industryTool && (
+                    <div className="relative z-10 mt-1 truncate rounded bg-black/60 px-1 py-0.5 text-center font-mono text-[8px] text-zinc-400">
+                      {node.industryTool.split("/")[0]}
+                    </div>
+                  )}
+
+                  {isSelected && toolMode === "select" && (
+                    <button
+                      type="button"
+                      aria-label="Resize"
+                      className="absolute -bottom-1.5 -right-1.5 z-20 h-3.5 w-3.5 cursor-nwse-resize rounded-sm border border-zinc-900 bg-copper"
+                      onPointerDown={(e) => startResize(node.id, e)}
+                    />
                   )}
                 </div>
               );
             })}
+                </div>
+              </div>
+            </div>
 
             {/* Deep Packet Inspector HUD Card (Active when particle is clicked / frozen) */}
             {selectedParticle && (
@@ -2195,14 +2872,29 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     <IconArrowRight size={13} className="text-copper" />
                     <span>{nodes.find((n) => n.id === selectedConn.to)?.label}</span>
                   </h4>
-                  <p className="font-mono text-[11px] text-soft">Protocol: {selectedConn.protocol || "HTTPS / Dataflow"}</p>
+                  <label htmlFor="conn-protocol" className="mt-1 block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">Protocol</label>
+                  <input
+                    id="conn-protocol"
+                    value={selectedConn.protocol || ""}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
+                    onChange={(e) => {
+                      const next = connectionsRef.current.map((conn) => conn.id === selectedConn.id ? { ...conn, protocol: e.target.value } : conn);
+                      connectionsRef.current = next;
+                      setConnections(next);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink"
+                  />
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    setConnections((prev) => prev.filter((c) => c.id !== selectedConn.id));
+                    remember();
+                    const next = connectionsRef.current.filter((c) => c.id !== selectedConn.id);
+                    connectionsRef.current = next;
+                    setConnections(next);
                     setSelectedConnId(null);
                     setToast({ message: "Connection removed", type: "info" });
                   }}
@@ -2217,7 +2909,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           {/* Selected Node Inspector Drawer (Full CRUD) */}
           {selectedNode && (
-            <div className="rounded-xl border border-line bg-paper p-5 shadow-xs">
+            <div className={`rounded-xl border border-line bg-paper p-5 shadow-xs ${fullPage ? "max-h-48 shrink-0 overflow-auto" : ""}`}>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
                 <div className="flex items-center gap-3">
                   <div
@@ -2270,6 +2962,8 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     id="node-label"
                     type="text"
                     value={selectedNode.label}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
                     onChange={(e) => updateSelectedNode("label", e.target.value)}
                     className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   />
@@ -2298,9 +2992,9 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   <input
                     id="node-latency"
                     type="number"
-                    min="1"
-                    max="1000"
                     value={selectedNode.latency}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
                     onChange={(e) => updateSelectedNode("latency", Number(e.target.value))}
                     className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   />
@@ -2313,9 +3007,9 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   <input
                     id="node-rps"
                     type="number"
-                    min="10"
-                    max="50000"
                     value={selectedNode.capacity}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
                     onChange={(e) => updateSelectedNode("capacity", Number(e.target.value))}
                     className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
                   />
@@ -2323,23 +3017,37 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               </div>
 
               {/* Enterprise Architecture Metadata Footer */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-bold text-ink">Operational Role:</span>
-                  <span className="font-mono text-ink/80">{nodeTypeMeta[selectedNode.type].desc}</span>
+              <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line/60 pt-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="node-role" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Role</label>
+                  <input
+                    id="node-role"
+                    type="text"
+                    value={selectedNode.role}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
+                    onChange={(e) => updateSelectedNode("role", e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                  />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-bold text-ink">Field name:</span>
-                  <span className="font-mono font-bold text-copper">
-                    {nodeTypeMeta[selectedNode.type].tool}
-                  </span>
+                <div>
+                  <label htmlFor="node-tool" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Field name</label>
+                  <input
+                    id="node-tool"
+                    type="text"
+                    value={selectedNode.industryTool}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
+                    onChange={(e) => updateSelectedNode("industryTool", e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                  />
                 </div>
               </div>
             </div>
           )}
 
           {/* Integrated AI Architecture Tutor & Step-by-Step Guide Panel */}
-          {showAiGuide && (
+          {!fullPage && showAiGuide && (
             <div className="rounded-xl border border-line bg-raised p-5 shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
                 <div className="flex items-center gap-2.5">
@@ -2459,8 +3167,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             </div>
           )}
 
-          {/* Quick Guide Card */}
-          <div className="rounded-xl border border-line bg-raised p-4 text-xs text-soft shadow-xs">
+          {!fullPage && <div className="rounded-xl border border-line bg-raised p-4 text-xs text-soft shadow-xs">
             <h4 className="flex items-center gap-2 font-bold text-ink">
               <IconPrinciple size={16} className="text-copper" />
               <span>One job each</span>
@@ -2468,9 +3175,12 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             <p className="mt-1 leading-relaxed">
               Each part of the drawing has one job. The person does not talk to the record directly.
             </p>
-          </div>
+          </div>}
         </div>
       </div>
     </div>
   );
+
+  if (fullPage && portalReady) return createPortal(lab, document.body);
+  return lab;
 }

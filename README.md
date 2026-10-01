@@ -5,7 +5,7 @@
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFrankAsanteVanLaarhoven%2FKeel)
 [![Live class](https://img.shields.io/badge/Vercel-keelai--os.vercel.app-success?logo=vercel&style=for-the-badge)](https://keelai-os.vercel.app)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?logo=github&style=for-the-badge)](https://github.com/FrankAsanteVanLaarhoven/Keel)
-[![Tests](https://img.shields.io/badge/Tests-40%20Passing-emerald?style=for-the-badge)](tests/keel.test.ts)
+[![Tests](https://img.shields.io/badge/Tests-46%20Passing-emerald?style=for-the-badge)](tests/)
 
 - **Public class**: [https://keelai-os.vercel.app](https://keelai-os.vercel.app)
 - **Source**: [https://github.com/FrankAsanteVanLaarhoven/Keel](https://github.com/FrankAsanteVanLaarhoven/Keel)
