@@ -10,7 +10,7 @@ import { previousWeeksDone, recommendWeeks, weekDone, weeks, workOpen } from "@/
 
 export async function generateMetadata(): Promise<Metadata> {
   const m = t(await resolveLocale());
-  return { title: `${m.termTitle} — Keel`, description: m.termDeck, robots: { index: false, follow: false } };
+  return { title: m.termTitle, description: m.termDeck, robots: { index: false, follow: false } };
 }
 
 export default async function TermPage() {

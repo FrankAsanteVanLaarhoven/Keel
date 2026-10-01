@@ -4,7 +4,7 @@ export default function Loading() {
       className="mx-auto max-w-4xl px-5 py-20"
       role="status"
       aria-busy="true"
-      aria-label="Loading"
+      aria-label="Opening this page"
     >
       <div className="animate-pulse space-y-6">
         <div className="h-4 w-24 bg-line" />
@@ -15,7 +15,7 @@ export default function Loading() {
           <div className="h-4 w-2/3 bg-line/60" />
         </div>
       </div>
-      <span className="sr-only">Loading content...</span>
+      <span className="sr-only">Opening this page.</span>
     </div>
   );
 }

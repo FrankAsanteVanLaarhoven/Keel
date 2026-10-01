@@ -12,7 +12,7 @@ import { workOpen } from "@/lib/term";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const course = await courseById((await params).id);
-  return { title: course ? `${course.title} — Keel` : "Keel", robots: { index: false, follow: false } };
+  return { title: course ? course.title : "Course", robots: { index: false, follow: false } };
 }
 
 export default async function CoursePage({ params }: { params: Promise<{ id: string }> }) {

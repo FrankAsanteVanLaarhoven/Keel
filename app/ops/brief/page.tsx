@@ -13,8 +13,7 @@ import { SectionScope } from "@/components/keel-context";
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const brief = getOps(locale).brief;
-  const m = t(locale);
-  return { title: `${brief.title} — Keel`, description: brief.dek };
+  return { title: brief.title, description: brief.dek };
 }
 
 export default async function OpsBriefPage() {

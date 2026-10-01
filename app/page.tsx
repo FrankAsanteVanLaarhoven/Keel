@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const m = t(locale);
   return {
-    title: m.homeTitle,
+    title: { absolute: `${m.homeTitle} · ${m.footer}` },
     description: m.homeDeck,
     alternates: { canonical: "/" },
   };

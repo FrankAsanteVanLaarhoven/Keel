@@ -10,7 +10,7 @@ import { termComplete } from "@/lib/term";
 
 export async function generateMetadata(): Promise<Metadata> {
   const m = t(await resolveLocale());
-  return { title: `${m.surveyTitle} — Keel`, description: m.surveyDeck, robots: { index: false, follow: false } };
+  return { title: m.surveyTitle, description: m.surveyDeck, robots: { index: false, follow: false } };
 }
 
 export default async function SurveyPage() {

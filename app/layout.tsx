@@ -5,6 +5,7 @@ import { dirFor, htmlLang } from "@/lib/locale";
 import { t } from "@/lib/i18n/catalog";
 import { resolveLocale } from "@/lib/i18n/server";
 import { Shell } from "@/components/shell";
+import { publicOrigin } from "@/lib/public-origin";
 import "./globals.css";
 
 const sans = IBM_Plex_Sans({
@@ -23,7 +24,7 @@ const mono = IBM_Plex_Mono({
 
 const boot = `(function(){try{var t=localStorage.getItem("keel.theme")||"system";if(t!=="light"&&t!=="dark"&&t!=="system")t="system";document.documentElement.dataset.theme=t;}catch(e){}})();`;
 
-const baseURL = process.env.BETTER_AUTH_URL || "http://127.0.0.1:3960";
+const baseURL = publicOrigin();
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
@@ -41,9 +42,6 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
       apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
       shortcut: "/icon.svg",
-    },
-    alternates: {
-      canonical: "/",
     },
     openGraph: {
       title: m.metaTitle,

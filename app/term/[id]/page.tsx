@@ -13,7 +13,7 @@ import { previousWeeksDone, weekById, weekDone, workOpen } from "@/lib/term";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const week = weekById(id);
-  return { title: week ? `${week.title} — Keel` : "Keel", robots: { index: false, follow: false } };
+  return { title: week ? week.title : "Week", robots: { index: false, follow: false } };
 }
 
 export default async function WeekPage({ params }: { params: Promise<{ id: string }> }) {

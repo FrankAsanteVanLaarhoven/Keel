@@ -342,6 +342,7 @@ export const ar: Messages = {
   privateNote: "خاص بحسابك.",
   noEmail: "لا تُعرض عناوين البريد.",
   loading: "يحمّل",
+  accountWait: "جارٍ التحقق من البريد والعبارة",
   depthStart: "البداية",
   depthHow: "كيف يعمل",
   depthExpert: "خبير",

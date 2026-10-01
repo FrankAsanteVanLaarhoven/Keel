@@ -342,6 +342,7 @@ export const zh: Messages = {
   privateNote: "只在你的账户里。",
   noEmail: "不显示邮箱。",
   loading: "正在载入",
+  accountWait: "正在核对邮箱和口令",
   depthStart: "入门",
   depthHow: "它怎么运作",
   depthExpert: "专家",

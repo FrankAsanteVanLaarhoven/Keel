@@ -10,7 +10,7 @@ import { OpsLevel, OpsMarks } from "@/components/ops-walk";
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const m = t(locale);
-  return { title: `${m.opsTitle} — Keel`, description: m.opsDeck };
+  return { title: m.opsTitle, description: m.opsDeck };
 }
 
 export default async function OpsPage() {

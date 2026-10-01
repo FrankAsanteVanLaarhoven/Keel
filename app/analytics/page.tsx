@@ -8,7 +8,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
   const m = t(locale);
   return {
-    title: `${m.analyticsTitle} — Keel`,
+    title: m.analyticsTitle,
     description: m.analyticsDeck,
     robots: { index: false, follow: false },
   };

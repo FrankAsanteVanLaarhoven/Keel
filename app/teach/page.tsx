@@ -13,7 +13,7 @@ import { progressSummary } from "@/lib/store";
 
 export async function generateMetadata(): Promise<Metadata> {
   const m = t(await resolveLocale());
-  return { title: `${m.teachTitle} — Keel`, description: m.teachDeck, robots: { index: false, follow: false } };
+  return { title: m.teachTitle, description: m.teachDeck, robots: { index: false, follow: false } };
 }
 
 export default async function TeachPage() {

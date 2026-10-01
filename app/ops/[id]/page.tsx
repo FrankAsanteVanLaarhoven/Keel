@@ -15,8 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!meta) return {};
   const locale = await resolveLocale();
   const copy = getOps(locale).sections[meta.id];
-  const m = t(locale);
-  return { title: `${copy.title} — Keel`, description: copy.promise };
+  return { title: copy.title, description: copy.promise };
 }
 
 export default async function OpsLevelPage({ params }: { params: Promise<{ id: string }> }) {

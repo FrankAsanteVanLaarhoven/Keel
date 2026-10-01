@@ -342,6 +342,7 @@ export const es: Messages = {
   privateNote: "Privado, en tu cuenta.",
   noEmail: "No se muestran correos.",
   loading: "Cargando",
+  accountWait: "Comprobando el correo y la frase de acceso",
   depthStart: "Inicio",
   depthHow: "Cómo funciona",
   depthExpert: "Experto",

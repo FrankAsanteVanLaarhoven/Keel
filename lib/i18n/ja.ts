@@ -342,6 +342,7 @@ export const ja: Messages = {
   privateNote: "あなたのアカウントの中だけです。",
   noEmail: "メールは表示しません。",
   loading: "読み込み中",
+  accountWait: "メールとパスフレーズを確認しています",
   depthStart: "はじめ",
   depthHow: "しくみ",
   depthExpert: "専門",

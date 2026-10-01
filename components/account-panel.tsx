@@ -78,7 +78,7 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
         ) : null}
         {error ? <p role="alert">{error}</p> : null}
         <button className="border border-ink bg-ink px-4 py-2 text-sm text-paper disabled:opacity-40" disabled={pending} aria-busy={pending} type="submit">
-          {pending ? m.loading : mode === "in" ? m.signIn : m.create}
+          {pending ? m.accountWait : mode === "in" ? m.signIn : m.create}
         </button>
       </form>
       <p className="mt-6 text-sm">
@@ -96,12 +96,22 @@ export function AuthPanel({ mode, m }: { mode: "in" | "up"; m: Messages }) {
 
 export function AccountPanel({ m }: { m: Messages }) {
   const { me, refresh } = useKeel();
-  if (!me) return <p className="px-5 py-16">{m.loading}</p>;
+  if (!me) {
+    return (
+      <div className="mx-auto max-w-xl px-5 py-16">
+        <h1 className="text-4xl font-medium tracking-tight">{m.accountTitle}</h1>
+        <p className="mt-3 text-soft">{m.loading}</p>
+      </div>
+    );
+  }
   if (!me.signedIn) {
     return (
-      <p className="px-5 py-16">
-        <Link className="underline" href="/sign-in">{m.signIn}</Link>
-      </p>
+      <div className="mx-auto max-w-xl px-5 py-16">
+        <h1 className="text-4xl font-medium tracking-tight">{m.accountTitle}</h1>
+        <p className="mt-6">
+          <Link className="underline" href="/sign-in">{m.signIn}</Link>
+        </p>
+      </div>
     );
   }
   return <AccountForm m={m} me={me} refresh={refresh} />;

@@ -340,6 +340,7 @@ export const en = {
   privateNote: "Private to your account.",
   noEmail: "Emails are not shown.",
   loading: "Loading",
+  accountWait: "Checking this account",
   depthStart: "Start",
   depthHow: "How it works",
   depthExpert: "Expert",

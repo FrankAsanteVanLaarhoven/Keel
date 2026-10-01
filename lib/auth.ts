@@ -5,6 +5,7 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { dataDir, ensureRecords, insertProfile, wipeUser } from "./db";
 import { authDatabase } from "./sql";
+import { publicOrigin } from "./public-origin";
 import { cleanName, isDesignatedAdmin, publicSignInLimit, publicSignUpLimit } from "./security";
 
 mkdirSync(dataDir, { recursive: true });
@@ -24,13 +25,7 @@ function secret(): string {
   return created;
 }
 
-export const baseURL =
-  process.env.BETTER_AUTH_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://127.0.0.1:3960");
+export const baseURL = publicOrigin();
 
 export const auth = betterAuth({
   appName: "Keel",
