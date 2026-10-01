@@ -60,6 +60,13 @@ describe("foundry model", () => {
     expect(sketchLanguage([card], "ruby")).toContain("attr_accessor :title");
     expect(sketchLanguage([card], "sql")).toContain("CREATE TABLE library_card");
     expect(sketchLanguage([card], "sql")).toContain("title text");
+    expect(sketchLanguage([{
+      nodes: [
+        { id: "book", type: "uml-class", label: "Book", attributes: "title" },
+        { id: "loan", type: "uml-class", label: "Loan", attributes: "due" },
+      ],
+      connections: [{ from: "loan", to: "book" }],
+    }], "sql")).toContain("FOREIGN KEY (book_id) REFERENCES book (id)");
     expect(sketchLanguage([card], "graphql")).toContain("type LibraryCard");
     expect(sketchLanguage([card], "graphql")).toContain("title: String");
     expect(sketchLanguage([{ nodes: [], connections: [] }], "java")).toContain("Draw a shape, then sketch the code again.");

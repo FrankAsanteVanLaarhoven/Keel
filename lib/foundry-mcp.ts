@@ -542,17 +542,26 @@ function unsafeCode(text: string): boolean {
 function sqlSketch(diagram: DiagramSnapshot): string {
   const entities = diagram.nodes.filter((node) => node.type === "erd-entity" || node.type === "erd-weak");
   const tables = (entities.length ? entities : diagram.nodes).slice(0, 8);
-  const lines = ["-- Sketch from the open sheet. This is a class exercise, not a live database."];
   const names = new Map<string, string>();
   tables.forEach((node, index) => {
-    const name = sqlName(node.label, `sheet_${index + 1}`);
-    names.set(node.id, name);
-    lines.push("", `CREATE TABLE ${name} (`, "  id TEXT PRIMARY KEY", ");");
+    names.set(node.id, sqlName(node.label, `sheet_${index + 1}`));
   });
+  const extras = new Map<string, string[]>();
   for (const link of diagram.connections) {
     const from = names.get(link.from);
     const to = names.get(link.to);
-    if (from && to) lines.push(`-- ${from} links to ${to}`);
+    if (!from || !to || from === to) continue;
+    const column = sqlName(link.label, `${to}_id`);
+    const list = extras.get(from) ?? [];
+    const line = `  ${column} TEXT,\n  FOREIGN KEY (${column}) REFERENCES ${to} (id)`;
+    if (!list.includes(line)) list.push(line);
+    extras.set(from, list);
+  }
+  const lines = ["-- Sketch from the open sheet. This is a class exercise, not a live database."];
+  for (const node of tables) {
+    const name = names.get(node.id) ?? "sheet";
+    const body = ["  id TEXT PRIMARY KEY", ...(extras.get(name) ?? [])];
+    lines.push("", `CREATE TABLE ${name} (`, body.join(",\n"), ");");
   }
   return lines.join("\n");
 }

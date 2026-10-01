@@ -1,6 +1,6 @@
 export type WireStyle = "curve" | "elbow" | "straight";
 
-export type UmlFamily = "class" | "usecase" | "sequence" | "activity" | "component" | "deploy" | "state" | "object" | "package" | "erd" | "ai" | "flowchart" | "mindmap" | "c4" | "sysml" | "bpmn" | "dataflow" | "wireframe" | "aws" | "gcp" | "azure";
+export type UmlFamily = "class" | "usecase" | "sequence" | "activity" | "component" | "deploy" | "state" | "object" | "package" | "timing" | "overview" | "infoflow" | "profile" | "erd" | "ai" | "flowchart" | "mindmap" | "c4" | "sysml" | "bpmn" | "dataflow" | "wireframe" | "aws" | "gcp" | "azure";
 
 export type UmlGlyph =
   | "class"
@@ -82,6 +82,13 @@ export type UmlNodeType =
   | "uml-frame"
   | "uml-ball"
   | "uml-socket"
+  | "uml-dur"
+  | "uml-tick"
+  | "uml-iuse"
+  | "uml-iitem"
+  | "uml-profile"
+  | "uml-stereo"
+  | "uml-meta"
   | "erd-entity"
   | "erd-weak"
   | "erd-assoc"
@@ -198,7 +205,9 @@ export type UmlRelation =
   | "itemflow"
   | "sequence"
   | "messageflow"
-  | "clink";
+  | "clink"
+  | "timecons"
+  | "extension";
 
 export type UmlMarkerEnd = "none" | "open" | "arrow" | "triangle" | "ball";
 export type UmlMarkerStart = "none" | "diamond" | "diamond-filled" | "plus";
@@ -233,6 +242,10 @@ export const UML_FAMILIES: readonly { id: UmlFamily; name: string }[] = [
   { id: "state", name: "State machine" },
   { id: "object", name: "Object" },
   { id: "package", name: "Package" },
+  { id: "timing", name: "Timing" },
+  { id: "overview", name: "Interaction overview" },
+  { id: "infoflow", name: "Information flow" },
+  { id: "profile", name: "Profile" },
   { id: "erd", name: "Entity-relationship" },
   { id: "ai", name: "AI design" },
   { id: "flowchart", name: "Flowchart" },
@@ -341,22 +354,22 @@ export function readStoredProject(file: unknown): { sheetId: string; sheets: Sto
 }
 
 const UML_TOOL_BY_TYPE: Record<UmlNodeType, UmlTool> = {
-  "uml-class": { type: "uml-class", name: "Class", families: ["class"], w: 200, h: 132, glyph: "class" },
+  "uml-class": { type: "uml-class", name: "Class", families: ["class", "infoflow"], w: 200, h: 132, glyph: "class" },
   "uml-iface": { type: "uml-iface", name: "Interface", families: ["class", "component"], w: 200, h: 120, glyph: "iface", stereotype: "interface" },
   "uml-enum": { type: "uml-enum", name: "Enumeration", families: ["class"], w: 180, h: 120, glyph: "enum", stereotype: "enumeration" },
   "uml-data": { type: "uml-data", name: "Data type", families: ["class"], w: 180, h: 96, glyph: "data", stereotype: "dataType" },
   "uml-pkg": { type: "uml-pkg", name: "Package", families: ["class", "package"], w: 200, h: 140, glyph: "package" },
-  "uml-actor": { type: "uml-actor", name: "Actor", families: ["usecase", "sequence"], w: 96, h: 132, glyph: "actor" },
+  "uml-actor": { type: "uml-actor", name: "Actor", families: ["usecase", "sequence", "infoflow"], w: 96, h: 132, glyph: "actor" },
   "uml-case": { type: "uml-case", name: "Use case", families: ["usecase"], w: 168, h: 72, glyph: "case" },
   "uml-bound": { type: "uml-bound", name: "Boundary", families: ["usecase"], w: 420, h: 260, glyph: "bound" },
-  "uml-life": { type: "uml-life", name: "Lifeline", families: ["sequence"], w: 140, h: 300, glyph: "life" },
+  "uml-life": { type: "uml-life", name: "Lifeline", families: ["sequence", "timing"], w: 140, h: 300, glyph: "life" },
   "uml-frag": { type: "uml-frag", name: "Fragment", families: ["sequence"], w: 240, h: 140, glyph: "frag", stereotype: "alt" },
-  "uml-action": { type: "uml-action", name: "Action", families: ["activity"], w: 168, h: 56, glyph: "action" },
-  "uml-decide": { type: "uml-decide", name: "Decision", families: ["activity"], w: 110, h: 88, glyph: "decide" },
-  "uml-start": { type: "uml-start", name: "Initial", families: ["activity", "state"], w: 72, h: 72, glyph: "start" },
-  "uml-stop": { type: "uml-stop", name: "Final", families: ["activity", "state"], w: 72, h: 72, glyph: "stop" },
+  "uml-action": { type: "uml-action", name: "Action", families: ["activity", "overview"], w: 168, h: 56, glyph: "action" },
+  "uml-decide": { type: "uml-decide", name: "Decision", families: ["activity", "overview"], w: 110, h: 88, glyph: "decide" },
+  "uml-start": { type: "uml-start", name: "Initial", families: ["activity", "state", "overview"], w: 72, h: 72, glyph: "start" },
+  "uml-stop": { type: "uml-stop", name: "Final", families: ["activity", "state", "overview"], w: 72, h: 72, glyph: "stop" },
   "uml-end": { type: "uml-end", name: "Flow final", families: ["activity"], w: 72, h: 72, glyph: "end" },
-  "uml-fork": { type: "uml-fork", name: "Fork", families: ["activity", "state"], w: 150, h: 56, glyph: "fork" },
+  "uml-fork": { type: "uml-fork", name: "Fork", families: ["activity", "state", "overview"], w: 150, h: 56, glyph: "fork" },
   "uml-object": { type: "uml-object", name: "Object", families: ["activity", "object"], w: 180, h: 96, glyph: "object" },
   "uml-lane": { type: "uml-lane", name: "Swimlane", families: ["activity"], w: 220, h: 320, glyph: "lane" },
   "uml-comp": { type: "uml-comp", name: "Component", families: ["component", "deploy"], w: 190, h: 110, glyph: "comp" },
@@ -365,13 +378,20 @@ const UML_TOOL_BY_TYPE: Record<UmlNodeType, UmlTool> = {
   "uml-node": { type: "uml-node", name: "Node", families: ["deploy"], w: 190, h: 120, glyph: "node" },
   "uml-device": { type: "uml-device", name: "Device", families: ["deploy"], w: 190, h: 110, glyph: "device", stereotype: "device" },
   "uml-exec": { type: "uml-exec", name: "Environment", families: ["deploy"], w: 200, h: 110, glyph: "exec", stereotype: "executionEnvironment" },
-  "uml-state": { type: "uml-state", name: "State", families: ["state"], w: 170, h: 96, glyph: "state" },
+  "uml-state": { type: "uml-state", name: "State", families: ["state", "timing"], w: 170, h: 96, glyph: "state" },
   "uml-choice": { type: "uml-choice", name: "Choice", families: ["state"], w: 96, h: 80, glyph: "choice" },
   "uml-hist": { type: "uml-hist", name: "History", families: ["state"], w: 72, h: 72, glyph: "hist" },
   "uml-model": { type: "uml-model", name: "Model", families: ["package"], w: 200, h: 140, glyph: "model", stereotype: "model" },
   "uml-frame": { type: "uml-frame", name: "Frame", families: ["package"], w: 460, h: 300, glyph: "frame" },
   "uml-ball": { type: "uml-ball", name: "Provided", families: ["component"], w: 88, h: 64, glyph: "ball" },
   "uml-socket": { type: "uml-socket", name: "Required", families: ["component"], w: 96, h: 64, glyph: "socket" },
+  "uml-dur": { type: "uml-dur", name: "Duration", families: ["timing"], w: 160, h: 56, glyph: "state" },
+  "uml-tick": { type: "uml-tick", name: "Tick", families: ["timing"], w: 72, h: 72, glyph: "hist" },
+  "uml-iuse": { type: "uml-iuse", name: "Interaction", families: ["overview"], w: 200, h: 80, glyph: "frag", stereotype: "interaction" },
+  "uml-iitem": { type: "uml-iitem", name: "Information", families: ["infoflow"], w: 180, h: 72, glyph: "data", stereotype: "information" },
+  "uml-profile": { type: "uml-profile", name: "Profile", families: ["profile"], w: 220, h: 140, glyph: "package", stereotype: "profile" },
+  "uml-stereo": { type: "uml-stereo", name: "Stereotype", families: ["profile"], w: 180, h: 96, glyph: "class", stereotype: "stereotype" },
+  "uml-meta": { type: "uml-meta", name: "Metaclass", families: ["profile"], w: 180, h: 96, glyph: "class", stereotype: "metaclass" },
   "erd-entity": { type: "erd-entity", name: "Entity", families: ["erd"], w: 220, h: 132, glyph: "entity", stereotype: "entity" },
   "erd-weak": { type: "erd-weak", name: "Weak entity", families: ["erd"], w: 220, h: 132, glyph: "weak", stereotype: "weak" },
   "erd-assoc": { type: "erd-assoc", name: "Junction", families: ["erd"], w: 220, h: 148, glyph: "junction", stereotype: "junction" },
@@ -458,20 +478,20 @@ const UML_RELATION_BY_ID: Record<UmlRelation, UmlRelationSpec> = {
   composition: { id: "composition", name: "Composition", families: ["class", "sysml"], dashed: false, end: "none", start: "diamond-filled", label: "" },
   generalization: { id: "generalization", name: "Generalization", families: ["class", "usecase"], dashed: false, end: "triangle", start: "none", label: "" },
   realization: { id: "realization", name: "Realization", families: ["class", "component"], dashed: true, end: "triangle", start: "none", label: "" },
-  dependency: { id: "dependency", name: "Dependency", families: ["class", "component", "deploy", "object", "package", "sysml"], dashed: true, end: "open", start: "none", label: "" },
+  dependency: { id: "dependency", name: "Dependency", families: ["class", "component", "deploy", "object", "package", "sysml", "infoflow"], dashed: true, end: "open", start: "none", label: "" },
   include: { id: "include", name: "Include", families: ["usecase"], dashed: true, end: "open", start: "none", label: "«include»" },
   extend: { id: "extend", name: "Extend", families: ["usecase"], dashed: true, end: "open", start: "none", label: "«extend»" },
-  message: { id: "message", name: "Message", families: ["sequence"], dashed: false, end: "arrow", start: "none", label: "" },
+  message: { id: "message", name: "Message", families: ["sequence", "timing"], dashed: false, end: "arrow", start: "none", label: "" },
   return: { id: "return", name: "Return", families: ["sequence"], dashed: true, end: "open", start: "none", label: "" },
   create: { id: "create", name: "Create", families: ["sequence"], dashed: true, end: "open", start: "none", label: "«create»" },
   destroy: { id: "destroy", name: "Destroy", families: ["sequence"], dashed: false, end: "arrow", start: "none", label: "«destroy»" },
-  transition: { id: "transition", name: "Transition", families: ["activity", "state"], dashed: false, end: "open", start: "none", label: "" },
+  transition: { id: "transition", name: "Transition", families: ["activity", "state", "overview"], dashed: false, end: "open", start: "none", label: "" },
   objectflow: { id: "objectflow", name: "Object flow", families: ["activity"], dashed: true, end: "open", start: "none", label: "" },
   assembly: { id: "assembly", name: "Assembly", families: ["component"], dashed: false, end: "ball", start: "none", label: "" },
   communicate: { id: "communicate", name: "Communication path", families: ["deploy"], dashed: false, end: "none", start: "none", label: "" },
   deploy: { id: "deploy", name: "Deployment", families: ["deploy"], dashed: true, end: "open", start: "none", label: "«deploy»" },
   containment: { id: "containment", name: "Containment", families: ["package"], dashed: false, end: "none", start: "plus", label: "" },
-  import: { id: "import", name: "Import", families: ["package"], dashed: true, end: "open", start: "none", label: "«import»" },
+  import: { id: "import", name: "Import", families: ["package", "profile"], dashed: true, end: "open", start: "none", label: "«import»" },
   merge: { id: "merge", name: "Merge", families: ["package"], dashed: true, end: "open", start: "none", label: "«merge»" },
   crows: { id: "crows", name: "Crow's foot", families: ["erd"], dashed: false, end: "none", start: "none", label: "" },
   identify: { id: "identify", name: "Identifying", families: ["erd"], dashed: false, end: "open", start: "none", label: "identifying" },
@@ -488,10 +508,12 @@ const UML_RELATION_BY_ID: Record<UmlRelation, UmlRelationSpec> = {
   satisfy: { id: "satisfy", name: "Satisfy", families: ["sysml"], dashed: true, end: "open", start: "none", label: "«satisfy»" },
   trace: { id: "trace", name: "Trace", families: ["sysml"], dashed: true, end: "open", start: "none", label: "«trace»" },
   allocate: { id: "allocate", name: "Allocate", families: ["sysml"], dashed: true, end: "open", start: "none", label: "«allocate»" },
-  itemflow: { id: "itemflow", name: "Item flow", families: ["sysml"], dashed: false, end: "arrow", start: "none", label: "" },
+  itemflow: { id: "itemflow", name: "Item flow", families: ["sysml", "infoflow"], dashed: false, end: "arrow", start: "none", label: "" },
   sequence: { id: "sequence", name: "Sequence flow", families: ["bpmn"], dashed: false, end: "arrow", start: "none", label: "" },
   messageflow: { id: "messageflow", name: "Message flow", families: ["bpmn"], dashed: true, end: "arrow", start: "none", label: "" },
   clink: { id: "clink", name: "Link", families: ["wireframe", "aws", "gcp", "azure"], dashed: false, end: "arrow", start: "none", label: "" },
+  timecons: { id: "timecons", name: "Time constraint", families: ["timing"], dashed: true, end: "open", start: "none", label: "" },
+  extension: { id: "extension", name: "Extension", families: ["profile"], dashed: false, end: "triangle", start: "none", label: "" },
 };
 
 export const UML_RELATIONS: readonly UmlRelationSpec[] = Object.values(UML_RELATION_BY_ID);
@@ -651,6 +673,30 @@ export function toolboxFor(family: string): ToolboxGroup[] {
       { name: "Storage", entries: [nodeEntry("gcp-gcs"), nodeEntry("gcp-sql")] },
       { name: "Network", entries: [nodeEntry("gcp-vpc"), nodeEntry("gcp-lb"), nodeEntry("gcp-cdn")] },
       { name: "Integration", entries: [nodeEntry("gcp-pub"), nodeEntry("gcp-iam"), relationEntry("clink")] },
+    ];
+  }
+  if (family === "timing") {
+    return [
+      { name: "Participants", entries: [nodeEntry("uml-life"), nodeEntry("uml-state"), nodeEntry("uml-dur"), nodeEntry("uml-tick")] },
+      { name: "Time", entries: [relationEntry("message"), relationEntry("timecons")] },
+    ];
+  }
+  if (family === "overview") {
+    return [
+      { name: "Flow", entries: [nodeEntry("uml-start"), nodeEntry("uml-action"), nodeEntry("uml-iuse"), nodeEntry("uml-decide"), nodeEntry("uml-fork"), nodeEntry("uml-stop")] },
+      { name: "Connectors", entries: [relationEntry("transition")] },
+    ];
+  }
+  if (family === "infoflow") {
+    return [
+      { name: "Ends", entries: [nodeEntry("uml-class"), nodeEntry("uml-actor"), nodeEntry("uml-iitem")] },
+      { name: "Flows", entries: [relationEntry("itemflow"), relationEntry("dependency")] },
+    ];
+  }
+  if (family === "profile") {
+    return [
+      { name: "Definitions", entries: [nodeEntry("uml-profile"), nodeEntry("uml-stereo"), nodeEntry("uml-meta")] },
+      { name: "Relations", entries: [relationEntry("extension"), relationEntry("import")] },
     ];
   }
   if (family === "azure") {

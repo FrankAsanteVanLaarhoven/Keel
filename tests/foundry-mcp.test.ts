@@ -93,6 +93,17 @@ describe("foundry mcp", () => {
       connections: [],
     });
     expect(code).toContain("CREATE TABLE library_card");
+    const linked = sketchCode({
+      language: "erd",
+      family: "erd",
+      selectedNodeId: null,
+      nodes: [
+        { id: "b", type: "erd-entity", label: "Book", x: 0, y: 0, w: 160, h: 90, stereotype: "" },
+        { id: "l", type: "erd-entity", label: "Loan", x: 200, y: 0, w: 160, h: 90, stereotype: "" },
+      ],
+      connections: [{ id: "c", from: "l", to: "b", kind: "", label: "" }],
+    });
+    expect(linked).toContain("FOREIGN KEY (book_id) REFERENCES book (id)");
     expect(code.toLowerCase()).not.toContain("dockerfile");
     expect(code.toLowerCase()).not.toContain("github");
 

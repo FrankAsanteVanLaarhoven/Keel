@@ -5,6 +5,10 @@ import {
   EXTENSION_EXAMPLE,
   EXTENSION_FRAME_HTML,
   compileCommands,
+  compileDialogs,
+  compileKeys,
+  compileMenus,
+  extensionSurfaceError,
   compileTools,
   extensionDraftError,
   isExtensionType,
@@ -52,6 +56,15 @@ describe("foundry extensions", () => {
     expect(toolVisible(compiled.tools[0], "uml", "class")).toBe(true);
     expect(toolVisible(compiled.tools[0], "aws", "aws")).toBe(false);
     expect(compileCommands(commands.map((command) => ({ name: command.name }))).commands[0].name).toBe("Number shapes");
+    const menus = compileMenus([{ name: "Number", command: "Number shapes" }]);
+    const keys = compileKeys([{ chord: "Alt + S", command: "Number shapes" }]);
+    const dialogs = compileDialogs([{ title: "Rename", label: "Name", command: "Number shapes" }]);
+    expect(menus.menus[0]).toEqual({ name: "Number", command: "Number shapes" });
+    expect(keys.keys[0]).toEqual({ chord: "alt+s", command: "Number shapes" });
+    expect(dialogs.dialogs[0]).toMatchObject({ title: "Rename", command: "Number shapes" });
+    expect(extensionSurfaceError([{ name: "Number shapes" }], menus.menus, keys.keys, dialogs.dialogs)).toBe("");
+    expect(compileKeys([{ chord: "ctrl+s", command: "Number shapes" }]).error).toMatch(/alt\+s/);
+    expect(extensionSurfaceError([], menus.menus, [], [])).toMatch(/Number shapes/);
     const patch = commands[0].run({ nodes: [{ id: "a", label: "Stamp" }] });
     const applied = readDiagramPatch(patch, new Set(["x-stamp", "box"]), new Set(["a"]), new Set());
     expect(applied).toMatchObject({ updateNodes: [{ id: "a", label: "1. Stamp" }] });

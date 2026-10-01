@@ -6,21 +6,42 @@ import {
   EXTENSION_EXAMPLE,
   EXTENSION_STORE,
   compileCommands,
+  compileDialogs,
+  compileKeys,
+  compileMenus,
   compileTools,
   extensionDraftError,
+  extensionSurfaceError,
   parseExtensionStore,
   readDiagramPatch,
   type AcceptedPatch,
   type DiagramSnapshot,
   type ExtensionCommand,
+  type ExtensionDialog,
+  type ExtensionKey,
+  type ExtensionKeyItem,
+  type ExtensionMenu,
+  type ExtensionMenuItem,
   type ExtensionRecord,
   type ExtensionTool,
 } from "@/lib/foundry-extensions";
 
 type LoadNote = { tone: "ok" | "error" | "wait"; text: string };
-type Loaded = { tools: ExtensionTool[]; commands: { name: string }[]; note: LoadNote };
+type Loaded = {
+  tools: ExtensionTool[];
+  commands: { name: string }[];
+  menus: ExtensionMenu[];
+  keys: ExtensionKey[];
+  dialogs: ExtensionDialog[];
+  note: LoadNote;
+};
+type Ask = { title: string; label: string; command: ExtensionCommand };
 
-const EMPTY_LOADED: Loaded = { tools: [], commands: [], note: { tone: "wait", text: "" } };
+function pack(note: LoadNote, extra?: Partial<Loaded>): Loaded {
+  return { tools: [], commands: [], menus: [], keys: [], dialogs: [], note, ...extra };
+}
+
+const EMPTY_LOADED: Loaded = pack({ tone: "wait", text: "" });
 const DRAW_AND_SERVICE = [
   "client", "gateway", "auth", "compute", "cache", "database", "queue", "ci", "telemetry",
   "text", "box", "ellipse", "diamond", "cylinder", "cloud", "note",
@@ -76,6 +97,8 @@ export function FoundryExtensions({
   applyPatch,
   onTools,
   onCommands,
+  onMenus,
+  onKeys,
   runExtensionRef,
 }: {
   open: boolean;
@@ -83,7 +106,9 @@ export function FoundryExtensions({
   applyPatch: (patch: AcceptedPatch) => void;
   onTools: (tools: ExtensionTool[]) => void;
   onCommands: (commands: ExtensionCommand[]) => void;
-  runExtensionRef: { current: (command: ExtensionCommand) => void };
+  onMenus: (menus: ExtensionMenuItem[]) => void;
+  onKeys: (keys: ExtensionKeyItem[]) => void;
+  runExtensionRef: { current: (command: ExtensionCommand, answer?: string) => void };
 }) {
   const [records, setRecords] = useExtensionRecords();
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -93,11 +118,15 @@ export function FoundryExtensions({
   const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
   const [frameKey, setFrameKey] = useState(0);
   const [running, setRunning] = useState("");
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const [askValue, setAskValue] = useState("");
   const frameRef = useRef<HTMLIFrameElement>(null);
   const recordsRef = useRef(records);
   const loadedRef = useRef(loaded);
   const onToolsRef = useRef(onTools);
   const onCommandsRef = useRef(onCommands);
+  const onMenusRef = useRef(onMenus);
+  const onKeysRef = useRef(onKeys);
   const applyPatchRef = useRef(applyPatch);
   const readDiagramRef = useRef(readDiagram);
   const skipRef = useRef<Map<string, string>>(new Map());
@@ -111,6 +140,8 @@ export function FoundryExtensions({
     loadedRef.current = loaded;
     onToolsRef.current = onTools;
     onCommandsRef.current = onCommands;
+    onMenusRef.current = onMenus;
+    onKeysRef.current = onKeys;
     applyPatchRef.current = applyPatch;
     readDiagramRef.current = readDiagram;
     runExtensionRef.current = runCommand;
@@ -136,6 +167,23 @@ export function FoundryExtensions({
       });
     }
     onCommandsRef.current(commands);
+    const menus: ExtensionMenuItem[] = [];
+    const keys: ExtensionKeyItem[] = [];
+    for (const record of nextRecords) {
+      if (!record.enabled) continue;
+      const item = nextLoaded[record.id];
+      const named = (item?.commands ?? []).map((command, index) => ({ extensionId: record.id, index, name: command.name }));
+      for (const menu of item?.menus ?? []) {
+        const command = named.find((entry) => entry.name === menu.command);
+        if (command) menus.push({ name: menu.name, command });
+      }
+      for (const key of item?.keys ?? []) {
+        const command = named.find((entry) => entry.name === key.command);
+        if (command) keys.push({ chord: key.chord, command });
+      }
+    }
+    onMenusRef.current(menus);
+    onKeysRef.current(keys);
   }
 
   function remember(next: Record<string, Loaded>) {
@@ -159,7 +207,7 @@ export function FoundryExtensions({
       if (skipRef.current.get(record.id) === record.source) {
         next = {
           ...next,
-          [record.id]: { tools: [], commands: [], note: { tone: "error", text: "The script did not finish. Look for a loop, then save again." } },
+          [record.id]: pack({ tone: "error", text: "The script did not finish. Look for a loop, then save again." }),
         };
         continue;
       }
@@ -172,7 +220,7 @@ export function FoundryExtensions({
         setFrameKey((key) => key + 1);
         remember({
           ...loadedRef.current,
-          [extensionId]: { tools: [], commands: [], note: { tone: "error", text: "The script did not finish. Look for a loop, then save again." } },
+          [extensionId]: pack({ tone: "error", text: "The script did not finish. Look for a loop, then save again." }),
         });
       }, 1500));
       frame.postMessage({ source: "keel-host", type: "load", extensionId, script }, "*");
@@ -195,6 +243,9 @@ export function FoundryExtensions({
       requestId?: string;
       tools?: unknown;
       commands?: unknown;
+      menus?: unknown;
+      keys?: unknown;
+      dialogs?: unknown;
       message?: string;
       patch?: unknown;
       error?: string;
@@ -212,7 +263,7 @@ export function FoundryExtensions({
       if (!record) return;
       let nextLoaded: Loaded;
       if (data.type === "failed") {
-        nextLoaded = { tools: [], commands: [], note: { tone: "error", text: `${data.message || "The script stopped."} Fix it and save again.` } };
+        nextLoaded = pack({ tone: "error", text: `${data.message || "The script stopped."} Fix it and save again.` });
       } else {
         const taken = new Set<string>();
         for (const item of recordsRef.current) {
@@ -221,17 +272,21 @@ export function FoundryExtensions({
         }
         const tools = compileTools(data.tools, taken);
         const commands = compileCommands(data.commands);
-        if (tools.error || commands.error) {
-          nextLoaded = { tools: [], commands: [], note: { tone: "error", text: tools.error || commands.error } };
+        const menus = compileMenus(data.menus);
+        const keys = compileKeys(data.keys);
+        const dialogs = compileDialogs(data.dialogs);
+        const surface = extensionSurfaceError(commands.commands, menus.menus, keys.keys, dialogs.dialogs);
+        const problem = tools.error || commands.error || menus.error || keys.error || dialogs.error || surface;
+        if (problem) {
+          nextLoaded = pack({ tone: "error", text: problem });
         } else if (tools.tools.length === 0 && commands.commands.length === 0) {
-          nextLoaded = { tools: [], commands: [], note: { tone: "error", text: "Add a keel.tool or a keel.command, then save again." } };
+          nextLoaded = pack({ tone: "error", text: "Add a keel.tool or a keel.command, then save again." });
         } else {
-          const count = tools.tools.length + commands.commands.length;
-          nextLoaded = {
-            tools: tools.tools,
-            commands: commands.commands,
-            note: { tone: "ok", text: `${record.name} added ${count} ${count === 1 ? "change" : "changes"} to the desk.` },
-          };
+          const count = tools.tools.length + commands.commands.length + menus.menus.length + keys.keys.length + dialogs.dialogs.length;
+          nextLoaded = pack(
+            { tone: "ok", text: `${record.name} added ${count} ${count === 1 ? "change" : "changes"} to the desk.` },
+            { tools: tools.tools, commands: commands.commands, menus: menus.menus, keys: keys.keys, dialogs: dialogs.dialogs },
+          );
         }
       }
       remember({ ...loadedRef.current, [id]: nextLoaded });
@@ -278,14 +333,15 @@ export function FoundryExtensions({
     setRecords(next);
     setDraftId(id);
     setDraftNote("");
-    remember({ ...loadedRef.current, [id]: { tools: [], commands: [], note: { tone: "wait", text: "Reading the script…" } } });
+    remember({ ...loadedRef.current, [id]: pack({ tone: "wait", text: "Reading the script…" }) });
   }
 
-  function runCommand(command: ExtensionCommand) {
+  function runCommand(command: ExtensionCommand, answer?: string) {
     const frame = frameRef.current?.contentWindow;
     if (!frame || running) return;
     const requestId = crypto.randomUUID();
     const diagram = readDiagramRef.current();
+    if (answer !== undefined) diagram.answer = answer.slice(0, 200);
     const nodeIds = new Set(diagram.nodes.map((node) => node.id));
     const connectionIds = new Set(diagram.connections.map((link) => link.id));
     const extra = loadedRef.current[command.extensionId]?.tools.map((tool) => tool.id) ?? [];
@@ -337,6 +393,22 @@ export function FoundryExtensions({
       name: command.name,
     }));
   });
+  const menus: ExtensionMenuItem[] = records.flatMap((record) => {
+    if (!record.enabled) return [];
+    const named = commands.filter((command) => command.extensionId === record.id);
+    return (loaded[record.id]?.menus ?? []).flatMap((menu) => {
+      const command = named.find((entry) => entry.name === menu.command);
+      return command ? [{ name: menu.name, command }] : [];
+    });
+  });
+  const dialogs: { title: string; label: string; command: ExtensionCommand }[] = records.flatMap((record) => {
+    if (!record.enabled) return [];
+    const named = commands.filter((command) => command.extensionId === record.id);
+    return (loaded[record.id]?.dialogs ?? []).flatMap((dialog) => {
+      const command = named.find((entry) => entry.name === dialog.command);
+      return command ? [{ title: dialog.title, label: dialog.label, command }] : [];
+    });
+  });
 
   return (
     <>
@@ -371,7 +443,7 @@ export function FoundryExtensions({
             New extension
           </button>
         </div>
-        <p className="mt-1 text-xs text-soft">A script can add shapes and commands to this desk. It runs in its own frame and can change the open diagram.</p>
+        <p className="mt-1 text-xs text-soft">A script can add shapes, commands, a menu, a key, and a dialog. It runs in its own frame and can change the open diagram. It is not loaded from the web.</p>
         {records.length > 0 ? (
           <ul className="mt-2 flex flex-col gap-1">
             {records.map((record) => {
@@ -393,7 +465,7 @@ export function FoundryExtensions({
                           remember({ ...loadedRef.current, [record.id]: EMPTY_LOADED });
                           return;
                         }
-                        remember({ ...loadedRef.current, [record.id]: { tools: [], commands: [], note: { tone: "wait", text: "Reading the script…" } } });
+                        remember({ ...loadedRef.current, [record.id]: pack({ tone: "wait", text: "Reading the script…" }) });
                       }}
                     />
                     {record.name}
@@ -441,6 +513,61 @@ export function FoundryExtensions({
             ))}
           </div>
         ) : null}
+        {menus.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1" role="menu" aria-label="Extension menu">
+            {menus.map((menu) => (
+              <button
+                key={`${menu.command.extensionId}-${menu.name}`}
+                type="button"
+                role="menuitem"
+                disabled={running !== ""}
+                className="min-h-11 rounded-lg border border-line bg-paper px-2.5 text-xs font-semibold text-ink hover:border-copper disabled:opacity-40"
+                onClick={() => runCommand(menu.command)}
+              >
+                {menu.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {dialogs.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1" aria-label="Extension dialogs">
+            {dialogs.map((dialog) => (
+              <button
+                key={`${dialog.command.extensionId}-${dialog.title}`}
+                type="button"
+                disabled={running !== ""}
+                className="min-h-11 rounded-lg border border-line bg-paper px-2.5 text-xs font-semibold text-ink hover:border-copper disabled:opacity-40"
+                onClick={() => {
+                  setAsk(dialog);
+                  setAskValue("");
+                }}
+              >
+                {dialog.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {ask ? (
+          <form
+            className="mt-2 grid gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const command = ask.command;
+              const value = askValue;
+              setAsk(null);
+              setAskValue("");
+              runCommand(command, value);
+            }}
+          >
+            <p className="text-xs font-semibold text-ink">{ask.title}</p>
+            <label className="text-xs font-semibold text-ink" htmlFor="extension-answer">{ask.label}</label>
+            <input id="extension-answer" value={askValue} onChange={(event) => setAskValue(event.target.value)} className="min-h-11 rounded-lg border border-line bg-paper px-2 text-xs font-semibold text-ink" />
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="min-h-11 rounded-lg border border-copper bg-copper px-2.5 text-xs font-semibold text-raised">Apply</button>
+              <button type="button" className="min-h-11 rounded-lg border border-line bg-paper px-2.5 text-xs font-semibold text-ink" onClick={() => setAsk(null)}>Cancel</button>
+            </div>
+          </form>
+        ) : null}
         <div className="mt-2 grid gap-2">
           <label className="text-xs font-semibold text-ink" htmlFor="extension-name">Name</label>
           <input id="extension-name" value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 rounded-lg border border-line bg-paper px-2 text-xs font-semibold text-ink" />
@@ -463,7 +590,7 @@ export function FoundryExtensions({
           {draftNote ? <p role="alert" className="text-xs text-danger">{draftNote}</p> : null}
           <details className="text-xs text-soft">
             <summary className="min-h-11 cursor-pointer font-semibold text-ink">How a script talks to the desk</summary>
-            <p className="mt-1">Call keel.tool with an id such as x-stamp, a name, languages such as uml or *, and a glyph such as class, art, action, or actor. Call keel.command with a name and a function. The function receives the diagram and returns updateNodes, addNodes, deleteNodes, addConnections, or deleteConnections.</p>
+            <p className="mt-1">Call keel.tool with an id such as x-stamp, a name, languages such as uml or *, and a glyph such as class, art, action, or actor. Call keel.command with a name and a function. The function receives the diagram and returns updateNodes, addNodes, deleteNodes, addConnections, or deleteConnections. keel.menu and keel.dialog name that command. keel.key uses a chord such as alt+s. A dialog puts the typed text on diagram.answer.</p>
           </details>
         </div>
       </section>

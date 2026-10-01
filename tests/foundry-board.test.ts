@@ -157,6 +157,11 @@ describe("foundry board", () => {
     expect(ai).toContain("Agent");
     expect(ai).toContain("Guard");
     expect(toolboxFor("class").map((group) => group.name)).toContain("Classes (basic)");
+    expect(diagramsFor("uml").map((family) => family.id)).toEqual(expect.arrayContaining(["timing", "overview", "infoflow", "profile"]));
+    expect(toolboxFor("timing").flatMap((group) => group.entries.map((entry) => entry.name))).toEqual(expect.arrayContaining(["Lifeline", "Duration", "Tick", "Time constraint"]));
+    expect(toolboxFor("overview").flatMap((group) => group.entries.map((entry) => entry.name))).toContain("Interaction");
+    expect(toolboxFor("infoflow").flatMap((group) => group.entries.map((entry) => entry.name))).toEqual(expect.arrayContaining(["Information", "Item flow"]));
+    expect(toolboxFor("profile").flatMap((group) => group.entries.map((entry) => entry.name))).toEqual(expect.arrayContaining(["Stereotype", "Metaclass", "Extension"]));
     const names = (family: string) => toolboxFor(family).flatMap((group) => group.entries.map((entry) => entry.name));
     expect(names("sysml")).toEqual(expect.arrayContaining(["Block", "Requirement", "Port", "Composition", "Item flow", "Satisfy"]));
     expect(names("c4")).toEqual(expect.arrayContaining(["Person", "Container", "Component"]));
@@ -191,7 +196,7 @@ describe("foundry board", () => {
     expect(names("gcp")).toEqual(expect.arrayContaining(["Compute Engine", "Cloud Storage", "Cloud Run"]));
     expect(names("azure")).toEqual(expect.arrayContaining(["Virtual machine", "Blob storage", "Entra ID"]));
     for (const cloud of ["aws-ec2", "gcp-gce", "az-vm", "wf-screen"]) expect(isShape(cloud)).toBe(true);
-    expect(diagramsFor("uml").map((item) => item.id)).toEqual(["class", "usecase", "sequence", "activity", "component", "deploy", "state", "object", "package"]);
+    expect(diagramsFor("uml").map((item) => item.id)).toEqual(["class", "usecase", "sequence", "activity", "component", "deploy", "state", "object", "package", "timing", "overview", "infoflow", "profile"]);
     expect(defaultFamily("uml")).toBe("class");
     expect(defaultFamily("c4")).toBe("c4");
     expect(familyOf("mindmap")).toBe("mindmap");

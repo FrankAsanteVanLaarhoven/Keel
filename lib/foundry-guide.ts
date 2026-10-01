@@ -30,7 +30,7 @@ export const FOUNDRY_GUIDE: readonly GuideChapter[] = [
           "One project holds several diagrams. The desk is one page.",
           "Light theme and Dark theme follow the page theme.",
           "The browser draws the page at the display resolution. There is no separate pixel-ratio control.",
-          "Modeling sketches Java, C#, C++, Python, PHP, JavaScript, TypeScript, Ruby, SQL, and GraphQL as local text.",
+          "Modeling sketches Java, C#, C++, Python, PHP, JavaScript, TypeScript, Ruby, SQL, and GraphQL as local text. A SQL sketch writes CREATE TABLE. A link from one shape to another adds a foreign key to the table it points at.",
           "Extensions are JavaScript kept in this browser.",
           "Check runs when you open a drawing, export it, or choose Check sheet.",
           "HTML notes download from Modeling. Print uses the browser at A4 or Letter.",
@@ -258,14 +258,14 @@ export const FOUNDRY_GUIDE: readonly GuideChapter[] = [
         id: "timing-diagram",
         title: "Timing Diagram",
         paragraphs: [
-          "There is no timing sheet. Use State machine for the states of one life, or Sequence for an ordered exchange.",
+          "Choose UML 2, then Timing. A Lifeline names one participant. State and Duration hold for a stretch of time. Tick marks one instant. Message joins two lifelines. Time constraint is the dashed limit on that time.",
         ],
       },
       {
         id: "interaction-overview",
         title: "Interaction Overview Diagram",
         paragraphs: [
-          "There is no interaction-overview sheet. Use Activity. An action name can point at the sequence it stands for.",
+          "Choose UML 2, then Interaction overview. Initial, Action, Decision, Fork, and Final order the flow. Interaction names the sequence that step stands for. Transition joins the steps.",
         ],
       },
       {
@@ -286,14 +286,14 @@ export const FOUNDRY_GUIDE: readonly GuideChapter[] = [
         id: "information-flow",
         title: "Information Flow Diagram",
         paragraphs: [
-          "There is no information-flow sheet. On SysML, Item flow names what moves between blocks. On Dataflow, a wire joins services.",
+          "Choose UML 2, then Information flow. Class and Actor are the ends. Information names what moves. Item flow draws that movement. Dependency marks a weaker reliance. On SysML, Item flow still joins blocks. On Dataflow, a wire joins services.",
         ],
       },
       {
         id: "profile-diagram",
         title: "Profile Diagram",
         paragraphs: [
-          "There is no profile sheet. Write a stereotype on the selected shape. The desk does not keep a separate stereotype catalog.",
+          "Choose UML 2, then Profile. Profile holds the definitions. Stereotype and Metaclass are the two boxes. Extension joins a stereotype to the metaclass it extends. Import brings in another profile. A stereotype written on a selected shape still applies on the other sheets.",
         ],
       },
     ],
@@ -438,14 +438,14 @@ export const FOUNDRY_GUIDE: readonly GuideChapter[] = [
         id: "ext-menus",
         title: "Menus",
         paragraphs: [
-          "A command is a row in Commands and in the Extensions panel. An extension does not add a menu of its own.",
+          "keel.menu takes a name and the command it runs. That name appears in Menu on the desk and in the Extensions panel. The command is a keel.command in the same script.",
         ],
       },
       {
         id: "ext-keymaps",
         title: "Keymaps",
         paragraphs: [
-          "An extension does not bind a key. Use the keyboard shortcuts in this guide, and run the command from Commands.",
+          "keel.key takes a chord such as alt+s and the command it runs. The chord is Alt plus one letter or digit. The desk shortcuts stay as they are.",
         ],
       },
       {
@@ -488,7 +488,7 @@ export const FOUNDRY_GUIDE: readonly GuideChapter[] = [
         id: "ext-dialogs",
         title: "Using Dialogs",
         paragraphs: [
-          "An extension does not open a dialog. Return a patch. The Extensions panel shows the summary, or the reason the patch was refused, and asks you to change the script and save again.",
+          "keel.dialog takes a title, a label, and the command it runs. The desk opens one field. The command receives that text as diagram.answer. A patch is still the way the command changes the drawing. The Extensions panel shows the summary, or the reason the patch was refused.",
         ],
       },
       {

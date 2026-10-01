@@ -114,7 +114,14 @@ export type DiagramSnapshot = {
   selectedNodeId: string | null;
   nodes: DiagramNodeView[];
   connections: DiagramLinkView[];
+  answer?: string;
 };
+
+export type ExtensionMenu = { name: string; command: string };
+export type ExtensionKey = { chord: string; command: string };
+export type ExtensionDialog = { title: string; label: string; command: string };
+export type ExtensionMenuItem = { name: string; command: ExtensionCommand };
+export type ExtensionKeyItem = { chord: string; command: ExtensionCommand };
 
 export type PatchUpdate = {
   id: string;
@@ -256,6 +263,68 @@ export function compileCommands(raw: unknown): { commands: { name: string }[]; e
     commands.push({ name });
   }
   return { commands, error: "" };
+}
+
+const CHORD = /^alt\+[a-z0-9]$/;
+
+export function compileMenus(raw: unknown): { menus: ExtensionMenu[]; error: string } {
+  if (raw === undefined) return { menus: [], error: "" };
+  if (!Array.isArray(raw)) return { menus: [], error: "The script did not return its menus as a list." };
+  if (raw.length > 8) return { menus: [], error: "An extension can add at most 8 menu items. Remove one and save again." };
+  const menus: ExtensionMenu[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") return { menus: [], error: "A keel.menu call needs a name and a command." };
+    const spec = item as Record<string, unknown>;
+    const name = clip(spec.name, 40);
+    const command = clip(spec.command, 40);
+    if (!name || !command) return { menus: [], error: "A menu item needs a name and the command it runs." };
+    menus.push({ name, command });
+  }
+  return { menus, error: "" };
+}
+
+export function compileKeys(raw: unknown): { keys: ExtensionKey[]; error: string } {
+  if (raw === undefined) return { keys: [], error: "" };
+  if (!Array.isArray(raw)) return { keys: [], error: "The script did not return its keys as a list." };
+  if (raw.length > 8) return { keys: [], error: "An extension can bind at most 8 keys. Remove one and save again." };
+  const keys: ExtensionKey[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") return { keys: [], error: "A keel.key call needs a chord and a command." };
+    const spec = item as Record<string, unknown>;
+    const chord = clip(spec.chord, 12).toLowerCase().replace(/\s+/g, "");
+    if (!CHORD.test(chord)) return { keys: [], error: "A key chord looks like alt+s. Use Alt and one letter or digit." };
+    if (seen.has(chord)) return { keys: [], error: `${chord} is already used in this script. Pick another chord.` };
+    const command = clip(spec.command, 40);
+    if (!command) return { keys: [], error: "A key needs the name of a command in this script." };
+    seen.add(chord);
+    keys.push({ chord, command });
+  }
+  return { keys, error: "" };
+}
+
+export function compileDialogs(raw: unknown): { dialogs: ExtensionDialog[]; error: string } {
+  if (raw === undefined) return { dialogs: [], error: "" };
+  if (!Array.isArray(raw)) return { dialogs: [], error: "The script did not return its dialogs as a list." };
+  if (raw.length > 4) return { dialogs: [], error: "An extension can open at most 4 dialogs. Remove one and save again." };
+  const dialogs: ExtensionDialog[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") return { dialogs: [], error: "A keel.dialog call needs a title and a command." };
+    const spec = item as Record<string, unknown>;
+    const title = clip(spec.title, 40);
+    const command = clip(spec.command, 40);
+    if (!title || !command) return { dialogs: [], error: "A dialog needs a title and the command it runs." };
+    dialogs.push({ title, label: clip(spec.label, 40) || "Value", command });
+  }
+  return { dialogs, error: "" };
+}
+
+export function extensionSurfaceError(commands: { name: string }[], menus: ExtensionMenu[], keys: ExtensionKey[], dialogs: ExtensionDialog[]): string {
+  const names = new Set(commands.map((command) => command.name));
+  for (const item of [...menus, ...keys, ...dialogs]) {
+    if (!names.has(item.command)) return `${item.command} is not a command in this script. Add that keel.command, then save again.`;
+  }
+  return "";
 }
 
 function listOf(value: unknown, label: string, limit: number): unknown[] | { error: string } {
@@ -443,12 +512,18 @@ export const EXTENSION_FRAME_HTML = `<!DOCTYPE html>
       try {
         var tools = [];
         var commands = [];
+        var menus = [];
+        var keys = [];
+        var dialogs = [];
         var keel = {
           tool: function (spec) { tools.push(spec); },
           command: function (name, run) {
             if (typeof run !== "function") throw new Error("keel.command needs a function after the name.");
             commands.push({ name: String(name || ""), run: run });
-          }
+          },
+          menu: function (spec) { menus.push(spec || {}); },
+          key: function (spec) { keys.push(spec || {}); },
+          dialog: function (spec) { dialogs.push(spec || {}); }
         };
         var runScript = new Function("keel", '"use strict";\\n' + String(data.script || ""));
         runScript(keel);
@@ -457,7 +532,10 @@ export const EXTENSION_FRAME_HTML = `<!DOCTYPE html>
           type: "loaded",
           extensionId: data.extensionId,
           tools: plainTools(tools),
-          commands: commands.map(function (command) { return { name: command.name }; })
+          commands: commands.map(function (command) { return { name: command.name }; }),
+          menus: JSON.parse(JSON.stringify(menus)),
+          keys: JSON.parse(JSON.stringify(keys)),
+          dialogs: JSON.parse(JSON.stringify(dialogs))
         });
       } catch (error) {
         delete runs[data.extensionId];

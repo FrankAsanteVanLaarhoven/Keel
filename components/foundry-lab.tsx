@@ -46,7 +46,7 @@ import {
   type UmlRelation,
   type WireStyle,
 } from "@/lib/foundry-board";
-import { isExtensionType, toolVisible, type AcceptedPatch, type DiagramSnapshot, type ExtensionCommand, type ExtensionTool } from "@/lib/foundry-extensions";
+import { isExtensionType, toolVisible, type AcceptedPatch, type DiagramSnapshot, type ExtensionCommand, type ExtensionKeyItem, type ExtensionMenuItem, type ExtensionTool } from "@/lib/foundry-extensions";
 import { FoundryExtensions } from "./foundry-extensions";
 import { FoundryAi } from "./foundry-ai";
 import { FoundryMermaid } from "./foundry-mermaid";
@@ -539,6 +539,8 @@ export function FoundryLab({ m, initialChallengeId, initialStudio }: { m: Messag
   const [looseShapes, setLooseShapes] = useState<{ id: string; label: string }[]>([]);
   const [printPage, setPrintPage] = useState<"a4" | "letter">("a4");
   const [extensionCommands, setExtensionCommands] = useState<ExtensionCommand[]>([]);
+  const [extensionMenus, setExtensionMenus] = useState<ExtensionMenuItem[]>([]);
+  const [showExtensionMenu, setShowExtensionMenu] = useState(false);
   const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, readCanvasTheme, () => "dark" as const);
   const [extensionTools, setExtensionTools] = useState<ExtensionTool[]>([]);
   const [showRail, setShowRail] = useState(false);
@@ -577,7 +579,8 @@ export function FoundryLab({ m, initialChallengeId, initialStudio }: { m: Messag
   });
   const paletteRef = useRef<() => void>(() => {});
   const checkToken = useRef(0);
-  const extensionRun = useRef<(command: ExtensionCommand) => void>(() => {});
+  const extensionRun = useRef<(command: ExtensionCommand, answer?: string) => void>(() => {});
+  const extensionKeysRef = useRef<ExtensionKeyItem[]>([]);
 
   useEffect(() => {
     nodesRef.current = nodes;
@@ -1920,6 +1923,14 @@ export function FoundryLab({ m, initialChallengeId, initialStudio }: { m: Messag
         return;
       }
       if (typing) return;
+      if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && key.length === 1) {
+        const hit = extensionKeysRef.current.find((item) => item.chord === `alt+${key}`);
+        if (hit) {
+          event.preventDefault();
+          extensionRun.current(hit.command);
+          return;
+        }
+      }
       if ((event.metaKey || event.ctrlKey) && key === "d") {
         event.preventDefault();
         commands.current.copy();
@@ -2774,6 +2785,29 @@ export function FoundryLab({ m, initialChallengeId, initialStudio }: { m: Messag
                 className="w-36 rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink"
               />
               <button type="button" aria-pressed={showExplorer} onClick={() => setShowExplorer((open) => !open)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showExplorer ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Model explorer</button>
+              {extensionMenus.length > 0 ? (
+                <div className="relative">
+                  <button type="button" aria-expanded={showExtensionMenu} aria-haspopup="menu" onClick={() => setShowExtensionMenu((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showExtensionMenu ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Menu</button>
+                  {showExtensionMenu ? (
+                    <div role="menu" aria-label="Extension menu" className="absolute left-0 top-12 z-20 flex min-w-40 flex-col rounded-lg border border-line bg-paper p-1 shadow-xl">
+                      {extensionMenus.map((menu) => (
+                        <button
+                          key={`${menu.command.extensionId}-${menu.name}`}
+                          type="button"
+                          role="menuitem"
+                          className="min-h-11 rounded-lg px-2.5 text-left text-xs font-semibold text-ink hover:border-copper hover:bg-raised"
+                          onClick={() => {
+                            setShowExtensionMenu(false);
+                            extensionRun.current(menu.command);
+                          }}
+                        >
+                          {menu.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <button type="button" aria-pressed={showExtensions} onClick={() => setShowExtensions((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showExtensions ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Extensions</button>
               <button type="button" aria-pressed={showAi} onClick={() => setShowAi((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showAi ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>AI desk</button>
               <button type="button" aria-pressed={showMermaid} onClick={() => setShowMermaid((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showMermaid ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Mermaid</button>
@@ -2892,6 +2926,8 @@ export function FoundryLab({ m, initialChallengeId, initialStudio }: { m: Messag
             applyPatch={applyExtensionPatch}
             onTools={setExtensionTools}
             onCommands={setExtensionCommands}
+            onMenus={setExtensionMenus}
+            onKeys={(keys) => { extensionKeysRef.current = keys; }}
             runExtensionRef={extensionRun}
           />
           <FoundryAi open={showAi} readDiagram={readDiagram} applyPatch={applyExtensionPatch} />

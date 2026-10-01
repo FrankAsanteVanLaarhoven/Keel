@@ -119,6 +119,7 @@ export function sketchFileExtension(language: SketchLanguage): string {
 }
 
 export function sketchLanguage(sheets: ModelSheet[], language: SketchLanguage): string {
+  if (language === "sql") return sqlTables(sheets);
   const nodes = sheets.flatMap((sheet) => sheet.nodes).filter((node) => node.label.trim()).slice(0, 40);
   if (nodes.length === 0) return comment(language, "Draw a shape, then sketch the code again.");
   const used = new Set<string>();
@@ -264,6 +265,50 @@ function readLink(value: unknown): ModelLink | null {
     kind: typeof raw.kind === "string" ? raw.kind : undefined,
     label: typeof raw.label === "string" ? raw.label : typeof raw.protocol === "string" ? raw.protocol : undefined,
   };
+}
+
+function sqlTables(sheets: ModelSheet[]): string {
+  const nodes = sheets.flatMap((sheet) => sheet.nodes).filter((node) => node.label.trim()).slice(0, 40);
+  if (nodes.length === 0) return comment("sql", "Draw a shape, then sketch the code again.");
+  const used = new Set<string>();
+  const tables = nodes.map((node, index) => {
+    const typeName = pascal(node.label) || `Shape${index + 1}`;
+    let unique = typeName;
+    let suffix = 2;
+    while (used.has(unique)) {
+      unique = `${typeName}${suffix}`;
+      suffix += 1;
+    }
+    used.add(unique);
+    const fields = linesOf(node.attributes).map((line, fieldIndex) => ident(line.split(/[\s:(]/)[0] || "", `field${fieldIndex + 1}`));
+    const note = node.documentation?.trim().split("\n")[0];
+    return { id: node.id, table: snake(unique), fields, note };
+  });
+  const byId = new Map(tables.map((table) => [table.id, table]));
+  const keys = new Map<string, string[]>();
+  for (const sheet of sheets) {
+    for (const link of sheet.connections) {
+      const from = byId.get(link.from);
+      const to = byId.get(link.to);
+      if (!from || !to || from.table === to.table) continue;
+      const column = link.label?.trim() ? snake(link.label) : `${to.table}_id`;
+      const line = `  FOREIGN KEY (${column}) REFERENCES ${to.table} (id)`;
+      const list = keys.get(from.id) ?? [];
+      if (!list.includes(line)) list.push(line);
+      if (!from.fields.some((field) => snake(field) === column)) from.fields.push(column);
+      keys.set(from.id, list);
+    }
+  }
+  const blocks = tables.map((table) => {
+    const head = table.note ? `${comment("sql", table.note)}\n` : "";
+    const columns = [
+      ...(table.fields.some((field) => snake(field) === "id") ? [] : ["  id text"]),
+      ...table.fields.map((field) => `  ${snake(field)} text`),
+      ...(keys.get(table.id) ?? []),
+    ];
+    return `${head}CREATE TABLE ${table.table} (\n${columns.join(",\n")}\n);`;
+  });
+  return `${blocks.join("\n\n")}\n`;
 }
 
 function sketchOne(node: ModelNode, index: number, language: SketchLanguage, used: Set<string>): string {
