@@ -12,7 +12,7 @@ On a narrow window the mission chips stay on one line and scroll sideways. The t
 
 ## Evidence
 
-Checked in Chrome against `next dev` on http://127.0.0.1:3961 from `/Users/favl/workspace/keel`. The class on port 3960 was left running and was not rebuilt for this note.
+Checked in Chrome against `next dev` on http://127.0.0.1:3961 from `/Users/favl/workspace/keel`. The class on port 3960 was still the previous build when these lines were written. It was fast-forwarded to the same commit, rebuilt, and checked afterwards. That check is recorded under Production class.
 
 - `pnpm exec tsc --noEmit` exited 0.
 - `pnpm exec eslint components/foundry-lab.tsx lib/foundry-board.ts tests/foundry-board.test.ts` exited 0 with no messages.
@@ -44,10 +44,24 @@ Checked in Chrome against `next dev` on http://127.0.0.1:3961 from `/Users/favl/
 | Q11 | PASS | One h1 in full page, and one h1 after leaving it. |
 | Q12 | PASS | No new informative image. Resize, Zoom in, Zoom out, Connector style, and Open a Foundry drawing have accessible names. |
 | Q13 | N/A | Indexing was not changed. |
-| Q14 | PASS | The Chrome session on 3961 reported no console error, no console warning, and no page error. This was the dev server, not a production build. |
+| Q14 | PASS | Chrome on the 3961 dev server, and later Chrome on the rebuilt class at 3960, reported no console error, no console warning, and no page error. |
 | Q15 | PASS | The Foundry files add no `console.log`. |
 | Q16 | N/A | Source maps were not changed. |
 | Q17 | NOT RUN | No production bundle was measured, and no budget is recorded. |
-| Q18 | PASS | 1280×900, 390×844, and 360×800 were exercised. The canvas stayed the main surface and the page did not scroll sideways. Blank canvas, a shape, a wire, fit, and scroll were used at desktop width. |
+| Q18 | PASS | 1280×900, 390×844, and 360×800 were exercised on the dev server and again on the rebuilt class. The canvas stayed the main surface and the page did not scroll sideways. Blank canvas, a shape, a wire, fit, and scroll were used at desktop width. |
 | Q19 | PASS | The bar uses the existing paper, ink, copper, border, radius, and text sizes. |
-| Q20 | PASS | Blank canvas, the shape tools, Fit, Parts, Exit full page, delete, and undo worked. Backspace and Command-Z deleted and restored a box. |
+| Q20 | PASS | Blank canvas, the shape tools, Fit, Parts, Exit full page, delete, and undo worked on the dev server and again on the rebuilt class. Backspace and Command-Z deleted and restored a box. |
+
+## Production class
+
+Checked the same day in Chrome against `pnpm start` on http://127.0.0.1:3960 from `/Users/favl/Keel` at `143f31f`. The public host was not opened. This note still does not claim the 20 checks as a release.
+
+- Title was `Interactive Systems Foundry · Keel`. Full page had one h1, Foundry. The overlay covered the window at 1280×900, 390×844, and 360×800, and a point on the class header hit the Foundry layer. `scrollWidth` matched the viewport.
+- Canvas viewport: 665×1262 at 1280×900, 611×372 at 390×844, 567×342 at 360×800. Blank canvas was inside the tool bar at each width. The page started empty.
+- Harbor Market at Fit kept PostgreSQL Ledger inside the canvas. At 100% the board scroll width was 1600 against a 1262px canvas, and scrolling reached the ledger at about 144×126. The card text was the short name, `35 ms`, and `20 rps`.
+- Blank canvas cleared the Harbor drawing. A box was renamed to Storefront and resized from 160×90 to 260×160. Client and App Logic Tier were joined by one wire, then changed to a straight line. Latency accepted 25000 with no max. Role accepted Desk.
+- Backspace removed the selected box and Command-Z restored it. With the box selected again, Delete removed it and Undo restored it.
+- Opening `{"nope":true}` showed: That file is not a Foundry drawing. Open a JSON file saved from this lab.
+- Parts opened the toolbox over the canvas. Exit full page returned one h1, Systems Architecture & Dataflow Lab, and the Architecture Toolbox heading.
+- That Chrome session reported no console error, no console warning, and no page error.
+- Q17 stays NOT RUN. No bundle budget is recorded.
