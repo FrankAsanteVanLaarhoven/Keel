@@ -11,7 +11,7 @@ import type { Scope } from "./keel-context";
 
 type Turn = { role: "you" | "tutor"; text: string };
 
-export function VoiceDock({ locale, m, scope, consent, live }: { locale: Locale; m: Messages; scope: Scope; consent: boolean; live: boolean }) {
+export function VoiceDock({ locale, m, scope, consent, live, pinned }: { locale: Locale; m: Messages; scope: Scope; consent: boolean; live: boolean; pinned: boolean }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -258,7 +258,7 @@ export function VoiceDock({ locale, m, scope, consent, live }: { locale: Locale;
   }
 
   return (
-    <section className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper">
+    <section className={pinned ? "no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper" : "no-print border-t border-line bg-paper"}>
       {open ? (
         <div className="mx-auto max-w-3xl px-4 pt-3">
           <p className="kicker">{m.transcript}</p>

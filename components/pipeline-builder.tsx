@@ -146,13 +146,13 @@ export function PipelineBuilder({ m }: { m: Messages }) {
       {loading ? <p className="mt-8 text-sm" aria-busy="true">{m.opening}</p> : null}
 
       {view ? (
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <section aria-labelledby="lineage-heading">
-            <div className="flex flex-wrap items-end gap-3">
+        <div className="mt-10 grid min-w-0 grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <section className="min-w-0" aria-labelledby="lineage-heading">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
               <label className="text-sm">
                 <span className="kicker block">{m.pipelineBranch}</span>
                 <select
-                  className="mt-2 border border-line bg-transparent px-3 py-2"
+                  className="mt-2 w-full border border-line bg-transparent px-3 py-2 sm:w-auto"
                   value={view.branch}
                   onChange={(event) => void load(event.target.value)}
                 >
@@ -164,7 +164,7 @@ export function PipelineBuilder({ m }: { m: Messages }) {
                 </select>
               </label>
               <form
-                className="flex flex-wrap items-end gap-2"
+                className="flex min-w-0 flex-wrap items-end gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void post({ action: "branch", name: branchName, from: view.branch }).then((next) => {
@@ -172,11 +172,11 @@ export function PipelineBuilder({ m }: { m: Messages }) {
                   });
                 }}
               >
-                <label className="text-sm">
+                <label className="min-w-0 flex-1 text-sm sm:flex-none">
                   <span className="kicker block">{m.pipelineNewBranch}</span>
-                  <input className="mt-2 border border-line bg-transparent px-3 py-2" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
+                  <input className="mt-2 w-full min-w-0 border border-line bg-transparent px-3 py-2 sm:w-48" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
                 </label>
-                <button className="border border-line px-3 py-2 text-sm" type="submit" disabled={busy}>{m.pipelineCreateBranch}</button>
+                <button className="shrink-0 border border-line px-3 py-2 text-sm" type="submit" disabled={busy}>{m.pipelineCreateBranch}</button>
               </form>
             </div>
 
@@ -220,7 +220,7 @@ export function PipelineBuilder({ m }: { m: Messages }) {
             {view.build ? <BuildRecord m={m} build={view.build} /> : null}
           </section>
 
-          <section className="grid gap-8" aria-label={m.pipeline}>
+          <section className="grid min-w-0 gap-8" aria-label={m.pipeline}>
             <form
               className="border border-line px-4 py-5"
               onSubmit={(event) => {
@@ -328,7 +328,7 @@ function PipelineGraph({ datasets, lineage, onDataset }: { datasets: Dataset[]; 
   const row = 64;
   const height = Math.max(datasets.length, lineage.length, 1) * row + 24;
   return (
-    <div className="mt-4 overflow-x-auto border border-line">
+    <div className="mt-4 min-w-0 overflow-x-auto border border-line">
       <svg className="min-w-[640px]" viewBox={`0 0 640 ${height}`} aria-hidden="true" width="640" height={height}>
         {datasets.map((dataset, index) => (
           <g key={dataset.name}>

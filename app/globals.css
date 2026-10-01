@@ -58,6 +58,8 @@
 html {
   background: var(--paper);
   color: var(--ink);
+  scroll-padding-top: 5.5rem;
+  scroll-padding-bottom: 7rem;
 }
 
 body {

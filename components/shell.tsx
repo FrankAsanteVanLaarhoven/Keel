@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type FocusEvent, type ReactNode } from "react";
 import { dirFor, htmlLang, locales, type Locale } from "@/lib/locale";
 import type { Messages } from "@/lib/i18n/en";
 import {
@@ -119,29 +119,34 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
   return (
     <WordingProvider>
     <>
-      <a className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-paper focus:px-3 focus:py-2" href="#content">
+      <a className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:bg-paper focus:px-3 focus:py-2" href="#content">
         {m.skip}
       </a>
-      <header className="sticky top-0 z-20 border-b border-line bg-paper">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-          <Link href="/" className="flex items-center gap-2 text-sm tracking-tight" aria-label={m.footer}>
+      <header className="sticky top-0 z-20 overflow-x-clip border-b border-line bg-paper">
+        <div className="grid grid-cols-1">
+        <div className="overflow-x-auto" onFocus={revealInBar}>
+        <div className="flex w-max min-w-full items-center gap-4 px-4 py-3">
+          <Link href="/" className="flex shrink-0 items-center gap-2 text-sm tracking-tight" aria-label={m.footer}>
             <Mark />
             <span>Keel</span>
           </Link>
-          <nav className="hidden items-center gap-4 md:flex" aria-label={m.menu}>
-            {links.map(([href, label]) => (
-              <Link key={href} href={href} className={navCurrent(pathname, href, links.map(([item]) => item)) ? "border-b border-copper text-sm" : "text-sm text-soft"}>
-                {label}
-              </Link>
-            ))}
+          <nav className="flex shrink-0 items-center gap-4" aria-label={m.menu}>
+            {links.map(([href, label]) => {
+              const current = navCurrent(pathname, href, links.map(([item]) => item));
+              return (
+                <Link key={href} href={href} aria-current={current ? "page" : undefined} className={current ? "shrink-0 whitespace-nowrap border-b border-copper text-sm" : "shrink-0 whitespace-nowrap text-sm text-soft"}>
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
-          <div className="ms-auto hidden items-end gap-4 lg:flex" aria-label={m.worldClock}>
+          <div className="hidden shrink-0 items-end gap-4 xl:flex" aria-label={m.worldClock}>
             {clockIds.map((id) => (
               <Clock key={id} label={clockLabel(id, locale, m)} zone={id === localClockId ? "" : id} now={now} locale={locale} />
             ))}
           </div>
-          <div className="ms-auto flex items-center gap-2 lg:ms-4">
-            <button className="text-sm underline lg:hidden" type="button" onClick={() => setClockOpen((open) => !open)}>
+          <div className="flex shrink-0 items-center gap-2">
+            <button className="text-sm underline xl:hidden" type="button" onClick={() => setClockOpen((open) => !open)}>
               {clockOpen ? m.collapseClock : m.worldShort}
             </button>
             <ClockMenu clockIds={clockIds} locale={locale} m={m} options={options} onChoose={chooseClock} />
@@ -178,15 +183,10 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
             )}
           </div>
         </div>
-        <nav className="flex gap-4 overflow-x-auto px-4 pb-3 md:hidden" aria-label={m.menu}>
-          {links.map(([href, label]) => (
-            <Link key={href} href={href} className={navCurrent(pathname, href, links.map(([item]) => item)) ? "border-b border-copper text-sm whitespace-nowrap" : "text-sm whitespace-nowrap text-soft"}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        </div>
+        </div>
         {clockOpen ? (
-          <div className="flex gap-4 overflow-x-auto border-t border-line px-4 py-2 lg:hidden" aria-label={m.worldClock}>
+          <div className="flex gap-4 overflow-x-auto border-t border-line px-4 py-2 xl:hidden" aria-label={m.worldClock}>
             {clockIds.length === 0 ? <p className="text-sm text-soft">{m.clockEmpty}</p> : null}
             {clockIds.map((id) => (
               <Clock key={id} label={clockLabel(id, locale, m)} zone={id === localClockId ? "" : id} now={now} locale={locale} />
@@ -210,7 +210,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
       ) : null}
       <CharacterBackdrop />
       <main id="content" className="relative z-10">{children}</main>
-      <footer className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 pb-36 text-sm text-soft">
+      <footer className={`mx-auto flex max-w-6xl items-center justify-between px-4 pt-8 text-sm text-soft ${consentChoice === "essential" || consentChoice === "voice" ? "pb-36" : "pb-8"}`}>
         <span>{m.footer}</span>
         <span className="flex gap-4">
           <Link href="/analytics">{m.analytics}</Link>
@@ -218,11 +218,27 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
           <Link href="/record">{m.record}</Link>
         </span>
       </footer>
-      <VoiceDock locale={locale} m={m} scope={scope} consent={Boolean(me?.consent || consentChoice === "voice")} live={Boolean(me?.live)} />
+      <VoiceDock locale={locale} m={m} scope={scope} consent={Boolean(me?.consent || consentChoice === "voice")} live={Boolean(me?.live)} pinned={consentChoice === "essential" || consentChoice === "voice"} />
       <span className="sr-only">{htmlLang(locale)} {dirFor(locale)}</span>
     </>
     </WordingProvider>
   );
+}
+
+function revealInBar(event: FocusEvent<HTMLDivElement>) {
+  const scroller = event.currentTarget;
+  const item = event.target instanceof HTMLElement ? event.target.closest("a, button, select") : null;
+  if (!(item instanceof HTMLElement) || !scroller.contains(item)) return;
+  const pad = 12;
+  const place = () => {
+    const view = scroller.getBoundingClientRect();
+    const box = item.getBoundingClientRect();
+    if (box.width <= 0 || (box.left >= view.left + pad && box.right <= view.right - pad)) return;
+    const delta = box.left < view.left + pad ? box.left - view.left - pad : box.right - view.right + pad;
+    scroller.scrollBy({ left: delta });
+  };
+  place();
+  window.requestAnimationFrame(place);
 }
 
 function navCurrent(pathname: string, href: string, hrefs: readonly string[]): boolean {
@@ -272,6 +288,11 @@ function ClockMenu({
   options: { id: string; label: string }[];
   onChoose: (value: string) => void;
 }) {
+  const [countriesReady, setCountriesReady] = useState(false);
+  useEffect(() => {
+    // Region names differ between this server and the browser. Fill the list after mount.
+    setCountriesReady(true);
+  }, []);
   const available = addableClockIds(clockIds, options.map((item) => item.id));
   const countryById = new Map(options.map((item) => [item.id, item.label]));
   return (
@@ -289,7 +310,7 @@ function ClockMenu({
           ))}
         </optgroup>
       ) : null}
-      {clockIds.length < clockLimit && available.length > 0 ? (
+      {countriesReady && clockIds.length < clockLimit && available.length > 0 ? (
         <optgroup label={m.clockAdd}>
           {available.map((id) => (
             <option key={`add:${id}`} value={`add:${id}`}>
@@ -313,8 +334,8 @@ function Clock({ label, zone, now, locale }: { label: string; zone: string; now:
       }).format(now)
     : "––:––:––";
   return (
-    <p className="min-w-16">
-      <span className="kicker block">{label}</span>
+    <p className="min-w-16 shrink-0">
+      <span className="kicker block whitespace-nowrap">{label}</span>
       <span className="num text-sm" suppressHydrationWarning>{time}</span>
     </p>
   );
