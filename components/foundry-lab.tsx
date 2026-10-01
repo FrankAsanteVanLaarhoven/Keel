@@ -8,16 +8,73 @@ import { useKeel } from "./keel-context";
 import { roomPlain, wordingText } from "@/lib/glossary";
 import { useWording } from "./wording";
 import {
+  MODEL_LANGUAGES,
+  UML_FAMILIES,
+  UML_RELATIONS,
+  UML_TOOLS,
   anchors,
   boardExtent,
+  compartmentLines,
+  crowMark,
+  defaultFamily,
+  diagramsFor,
   isShape,
+  languageLabel,
+  languageOf,
+  loopPath,
+  memberLine,
   nodeSize,
   pointOnWire,
+  readStoredProject,
+  relationKindOf,
+  relationLook,
+  relationsFor,
   snapCoord,
+  stereotypeLabel,
+  toolboxFor,
+  umlGlyph,
+  umlTool,
+  visibilityOf,
   wirePath,
   wireStyleOf,
+  type CrowMark,
+  type ModelLanguage,
+  type ToolboxEntry,
+  type UmlFamily,
+  type UmlGlyph,
+  type UmlNodeType,
+  type UmlRelation,
   type WireStyle,
 } from "@/lib/foundry-board";
+import { isExtensionType, toolVisible, type AcceptedPatch, type DiagramSnapshot, type ExtensionCommand, type ExtensionTool } from "@/lib/foundry-extensions";
+import { FoundryExtensions } from "./foundry-extensions";
+import { FoundryAi } from "./foundry-ai";
+import { FoundryMermaid } from "./foundry-mermaid";
+import { wireframeScreen } from "@/lib/foundry-mermaid";
+import { sketchPath } from "@/lib/foundry-sketch";
+import { checkModel, diagramSvg, htmlNotes, relationshipLines, sketchFileExtension, sketchLanguage as sketchModel, unconnectedNodes, type ModelIssue, type ModelSheet, type SketchLanguage } from "@/lib/foundry-model";
+import {
+  CHALLENGES,
+  DEMO_TEMPLATES,
+  DRAW_TYPES,
+  SERVICE_TYPES,
+  architectShouldWatch,
+  clientReachesDatabase,
+  connectionExportRecord,
+  drawingTypeName,
+  linkIsClientToDatabase,
+  nodeExportRecord,
+  readImportedConnections,
+  readImportedNode,
+  sheetsToModel,
+  type ChallengeId,
+  type Connection,
+  type DiagramSheet,
+  type NodeType,
+  type SystemNode,
+} from "@/lib/foundry-drawing";
+import { SHARE_CHANNEL, SHARE_LIMIT, readShareMessage, shareRoom } from "@/lib/foundry-share";
+import { DocumentationField, FoundryCommands, FoundryModeling, chooseFoundryPage, chooseFoundryTheme, readCanvasTheme, subscribeCanvasTheme, type DeskCommand } from "./foundry-modeling";
 import {
   IconClient,
   IconGateway,
@@ -49,64 +106,9 @@ import {
   IconAnalytics,
 } from "./icons";
 
-function NodeWords({ label, role, tool, type, bare }: { label: string; role: string; tool: string; type: string; bare?: boolean }) {
-  const mode = useWording();
-  const meaning = mode === "plain" ? roomPlain[type] || wordingText(label, mode) : wordingText(label, mode);
-  if (bare) return <span title={wordingText(label, mode)}>{label}</span>;
-  return (
-    <>
-      <p className="mt-1 truncate text-xs font-bold text-inherit" title={meaning}>{label}</p>
-      {tool ? <p className="truncate text-[10px] text-inherit opacity-80" title={wordingText(tool, mode)}>{tool.split("/")[0]}</p> : null}
-      {role ? <p className="sr-only">{role}</p> : null}
-    </>
-  );
-}
+export type { Connection, DemoTemplate, NodeType, SystemNode } from "@/lib/foundry-drawing";
 
-export type NodeType =
-  | "client"
-  | "gateway"
-  | "auth"
-  | "compute"
-  | "cache"
-  | "database"
-  | "queue"
-  | "ci"
-  | "telemetry"
-  | "text"
-  | "box"
-  | "ellipse"
-  | "diamond"
-  | "cylinder"
-  | "cloud"
-  | "note";
-
-export interface SystemNode {
-  id: string;
-  type: NodeType;
-  label: string;
-  x: number;
-  y: number;
-  w?: number;
-  h?: number;
-  z?: number;
-  health: "healthy" | "degraded" | "down";
-  latency: number; // ms
-  capacity: number; // rps
-  rps: number;
-  role: string;
-  industryTool: string;
-}
-
-export interface Connection {
-  id: string;
-  from: string;
-  to: string;
-  status: "idle" | "active" | "error";
-  protocol?: string;
-  style?: WireStyle;
-}
-
-interface Particle {
+type Particle = {
   id: number;
   connId: string;
   progress: number;
@@ -120,358 +122,129 @@ interface Particle {
   sourceLabel: string;
   targetLabel: string;
   description: string;
-}
-
-type ChallengeId = "freeform" | "c1_security" | "c2_design" | "c3_cicd" | "c4_scale" | "c5_observability" | "c6_status";
-
-interface Challenge {
-  id: ChallengeId;
-  course: "CSC2031" | "CSC2035" | "CSC2033" | "CSC3131" | "SANDBOX";
-  courseTitle: string;
-  badge: string;
-  title: string;
-  goal: string;
-  hint: string;
-  initialNodes: SystemNode[];
-  initialConnections: Connection[];
-  checkSuccess: (nodes: SystemNode[], conns: Connection[]) => boolean;
-}
-
-export interface DemoTemplate {
-  id: string;
-  name: string;
-  badge: string;
-  description: string;
-  nodes: SystemNode[];
-  connections: Connection[];
-}
-
-const nodeTypeMeta: Record<
-  NodeType,
-  {
-    name: string;
-    color: string;
-    Icon: React.ComponentType<{ size?: number; className?: string }>;
-    tool: string;
-    desc: string;
-  }
-> = {
-  client: { name: "Client / Browser", color: "#1e293b", Icon: IconClient, tool: "Web / Mobile / React", desc: "User touchpoint that requests data and presents views." },
-  gateway: { name: "API Gateway / WAF", color: "#1e40af", Icon: IconGateway, tool: "Nginx / Envoy / Cloudflare", desc: "Routes traffic, terminates SSL, rate-limits, and shields backends." },
-  auth: { name: "Auth & Security Guard", color: "#831843", Icon: IconAuth, tool: "Better Auth / JWT / OAuth", desc: "Verifies session identity, issues tokens, checks permissions." },
-  compute: { name: "App Logic Tier", color: "#3730a3", Icon: IconCompute, tool: "Node.js / Go / Kubernetes Pod", desc: "Runs business rules, processes calculations, handles mutations." },
-  cache: { name: "Distributed Cache", color: "#065f46", Icon: IconCache, tool: "Redis / Memcached", desc: "Delivers sub-millisecond responses for repeatable read data." },
-  database: { name: "Authoritative Database", color: "#78350f", Icon: IconDatabase, tool: "PostgreSQL / SQLite", desc: "Durable persistent storage that records ground truth." },
-  queue: { name: "Message Broker / Queue", color: "#9a3412", Icon: IconQueue, tool: "Kafka / RabbitMQ / SQS", desc: "Decouples spikes by buffering async jobs and payments." },
-  ci: { name: "CI/CD Pipeline Runner", color: "#0f766e", Icon: IconCI, tool: "GitHub Actions / GitLab CI", desc: "Runs automated linting, unit tests, secret scanning before deploy." },
-  telemetry: { name: "Telemetry & SRE Agent", color: "#115e59", Icon: IconTelemetry, tool: "Prometheus / Grafana / OTel", desc: "Gathers logs, metrics, traces, and triggers actionable alerts." },
-  text: { name: "Text", color: "#e4e4e7", Icon: IconPrinciple, tool: "Label", desc: "Text" },
-  box: { name: "Box", color: "#a1a1aa", Icon: IconCompute, tool: "Rectangle", desc: "Box" },
-  ellipse: { name: "Ellipse", color: "#a1a1aa", Icon: IconClient, tool: "Ellipse", desc: "Ellipse" },
-  diamond: { name: "Diamond", color: "#a1a1aa", Icon: IconAuth, tool: "Diamond", desc: "Diamond" },
-  cylinder: { name: "Cylinder", color: "#a1a1aa", Icon: IconDatabase, tool: "Cylinder", desc: "Cylinder" },
-  cloud: { name: "Cloud", color: "#a1a1aa", Icon: IconGateway, tool: "Cloud", desc: "Cloud" },
-  note: { name: "Note", color: "#fbbf24", Icon: IconArchitect, tool: "Note", desc: "Note" },
 };
 
-const SERVICE_TYPES: NodeType[] = ["client", "gateway", "auth", "compute", "cache", "database", "queue", "ci", "telemetry"];
-const DRAW_TYPES: NodeType[] = ["text", "box", "ellipse", "diamond", "cylinder", "cloud", "note"];
+function NodeWords({ label, role, tool, type, bare }: { label: string; role: string; tool: string; type: string; bare?: boolean }) {
+  const mode = useWording();
+  const meaning = mode === "plain" ? roomPlain[type] || wordingText(label, mode) : wordingText(label, mode);
+  if (bare) return <span title={wordingText(label, mode)}>{label}</span>;
+  return (
+    <>
+      <p className="mt-1 truncate text-xs font-bold text-inherit" title={meaning}>{label}</p>
+      {tool ? <p className="truncate text-[10px] text-inherit opacity-80" title={wordingText(tool, mode)}>{tool.split("/")[0]}</p> : null}
+      {role ? <p className="sr-only">{role}</p> : null}
+    </>
+  );
+}
 
-// 5 Rich Prebuilt Production Enterprise Practice Templates
-const DEMO_TEMPLATES: DemoTemplate[] = [
-  {
-    id: "harbor_ecommerce",
-    name: "Harbor Market: 3-Tier E-Commerce",
-    badge: "Production Stack",
-    description: "Multi-tier architecture with Edge Gateway, Better Auth verification, Node.js API, Redis read cache, PostgreSQL transactional ledger, and Kafka async checkout queue.",
-    nodes: [
-      { id: "hm-client", type: "client", label: "Shopper Mobile", x: 40, y: 150, health: "healthy", latency: 15, capacity: 500, rps: 80, role: "Client App", industryTool: "iOS / Web" },
-      { id: "hm-gateway", type: "gateway", label: "Cloudflare Edge", x: 240, y: 150, health: "healthy", latency: 5, capacity: 5000, rps: 80, role: "Traffic Ingress", industryTool: "Cloudflare WAF" },
-      { id: "hm-auth", type: "auth", label: "Auth Guard", x: 240, y: 280, health: "healthy", latency: 8, capacity: 2000, rps: 40, role: "Session Verification", industryTool: "Better Auth" },
-      { id: "hm-api", type: "compute", label: "Harbor API Tier", x: 450, y: 150, health: "healthy", latency: 25, capacity: 1500, rps: 80, role: "Core Business Logic", industryTool: "Node.js / Express" },
-      { id: "hm-cache", type: "cache", label: "Redis Read Cache", x: 670, y: 60, health: "healthy", latency: 2, capacity: 10000, rps: 60, role: "Sub-ms Catalog Reads", industryTool: "Redis Cluster" },
-      { id: "hm-queue", type: "queue", label: "Order Broker", x: 670, y: 260, health: "healthy", latency: 10, capacity: 8000, rps: 30, role: "Async Checkout Buffer", industryTool: "Apache Kafka" },
-      { id: "hm-db", type: "database", label: "PostgreSQL Ledger", x: 890, y: 150, health: "healthy", latency: 35, capacity: 800, rps: 20, role: "Durable Transactions", industryTool: "PostgreSQL" },
-      { id: "hm-telemetry", type: "telemetry", label: "Prometheus SRE", x: 450, y: 390, health: "healthy", latency: 5, capacity: 5000, rps: 80, role: "Latency & Error Traces", industryTool: "Prometheus / Grafana" },
-    ],
-    connections: [
-      { id: "c-hm-1", from: "hm-client", to: "hm-gateway", status: "active", protocol: "HTTPS / TLS 1.3" },
-      { id: "c-hm-2", from: "hm-gateway", to: "hm-auth", status: "active", protocol: "Session Token" },
-      { id: "c-hm-3", from: "hm-gateway", to: "hm-api", status: "active", protocol: "gRPC" },
-      { id: "c-hm-4", from: "hm-api", to: "hm-cache", status: "active", protocol: "RESP (Redis)" },
-      { id: "c-hm-5", from: "hm-api", to: "hm-queue", status: "active", protocol: "Kafka Event" },
-      { id: "c-hm-6", from: "hm-api", to: "hm-db", status: "active", protocol: "SQL / TLS" },
-      { id: "c-hm-7", from: "hm-api", to: "hm-telemetry", status: "active", protocol: "OTel Traces" },
-    ],
-  },
-  {
-    id: "riverside_clinic",
-    name: "Riverside Clinic: Zero-Trust Healthcare",
-    badge: "HIPAA Compliant",
-    description: "Strict isolation architecture: Patient portal traffic flows through a WAF firewall and mandatory RBAC identity guard before touching health records. Directly shielded DB.",
-    nodes: [
-      { id: "rc-client", type: "client", label: "Patient Portal", x: 40, y: 160, health: "healthy", latency: 18, capacity: 300, rps: 45, role: "Patient Browser", industryTool: "Next.js Web" },
-      { id: "rc-waf", type: "gateway", label: "Ingress WAF", x: 240, y: 160, health: "healthy", latency: 6, capacity: 3000, rps: 45, role: "DDOS & Injection Shield", industryTool: "Envoy Proxy" },
-      { id: "rc-auth", type: "auth", label: "RBAC Identity Guard", x: 450, y: 160, health: "healthy", latency: 12, capacity: 1500, rps: 45, role: "MFA & Role Tokens", industryTool: "OAuth2 / OIDC" },
-      { id: "rc-api", type: "compute", label: "Clinical Records API", x: 670, y: 160, health: "healthy", latency: 30, capacity: 1000, rps: 45, role: "Encrypted Business Logic", industryTool: "Go Microservice" },
-      { id: "rc-db", type: "database", label: "Encrypted EHR Store", x: 890, y: 160, health: "healthy", latency: 45, capacity: 600, rps: 45, role: "AES-256 Medical Records", industryTool: "PostgreSQL TDE" },
-      { id: "rc-telemetry", type: "telemetry", label: "Audit & Access Log", x: 670, y: 350, health: "healthy", latency: 4, capacity: 4000, rps: 45, role: "Immutable Access Audit", industryTool: "OpenTelemetry" },
-    ],
-    connections: [
-      { id: "c-rc-1", from: "rc-client", to: "rc-waf", status: "active", protocol: "HTTPS mTLS" },
-      { id: "c-rc-2", from: "rc-waf", to: "rc-auth", status: "active", protocol: "Header Inspection" },
-      { id: "c-rc-3", from: "rc-auth", to: "rc-api", status: "active", protocol: "Verified JWT" },
-      { id: "c-rc-4", from: "rc-api", to: "rc-db", status: "active", protocol: "Encrypted SQL" },
-      { id: "c-rc-5", from: "rc-api", to: "rc-telemetry", status: "active", protocol: "Audit Stream" },
-    ],
-  },
-  {
-    id: "gitops_pipeline",
-    name: "GitOps Automated CI/CD Delivery",
-    badge: "Continuous Delivery",
-    description: "The Andon Cord pipeline: Code commits trigger automated linters, secret scanning, and integration tests before deployment to live production clusters.",
-    nodes: [
-      { id: "git-dev", type: "client", label: "Developer Laptop", x: 40, y: 170, health: "healthy", latency: 8, capacity: 50, rps: 10, role: "Git Commits", industryTool: "VS Code / Git" },
-      { id: "git-ci", type: "ci", label: "GitHub Actions CI", x: 270, y: 170, health: "healthy", latency: 120, capacity: 200, rps: 10, role: "Test & Security Gate", industryTool: "GitHub Actions" },
-      { id: "git-auth", type: "auth", label: "OIDC Deploy Auth", x: 490, y: 70, health: "healthy", latency: 15, capacity: 500, rps: 10, role: "Cloud Role Provider", industryTool: "AWS IAM / Workload ID" },
-      { id: "git-canary", type: "compute", label: "Canary Staging Pod", x: 490, y: 250, health: "healthy", latency: 25, capacity: 500, rps: 10, role: "Shadow Traffic Verification", industryTool: "K8s Canary" },
-      { id: "git-prod", type: "compute", label: "Production Cluster", x: 740, y: 170, health: "healthy", latency: 20, capacity: 2500, rps: 100, role: "Live High-Availability Pod", industryTool: "Kubernetes" },
-      { id: "git-telemetry", type: "telemetry", label: "Deployment Metrics", x: 740, y: 360, health: "healthy", latency: 5, capacity: 5000, rps: 100, role: "Error Budget & DORA Tracker", industryTool: "Grafana DORA" },
-    ],
-    connections: [
-      { id: "c-git-1", from: "git-dev", to: "git-ci", status: "active", protocol: "Git Push (SSH)" },
-      { id: "c-git-2", from: "git-ci", to: "git-auth", status: "active", protocol: "OIDC Token" },
-      { id: "c-git-3", from: "git-ci", to: "git-canary", status: "active", protocol: "Deploy Manifest" },
-      { id: "c-git-4", from: "git-canary", to: "git-prod", status: "active", protocol: "Promote on Green" },
-      { id: "c-git-5", from: "git-prod", to: "git-telemetry", status: "active", protocol: "Telemetry" },
-    ],
-  },
-  {
-    id: "surge_spike",
-    name: "1,000,000 RPS Ticket Surge Topology",
-    badge: "Extreme Scale",
-    description: "Absorbs extreme 10:00 AM traffic spikes without database crashes: Anycast CDN + load balancer distributes load across dual compute pods, backed by a Redis cluster and order queue.",
-    nodes: [
-      { id: "surge-crowd", type: "client", label: "10:00 AM Shoppers", x: 40, y: 170, health: "healthy", latency: 15, capacity: 20000, rps: 3500, role: "Traffic Surge", industryTool: "Mobile & Web Browsers" },
-      { id: "surge-cdn", type: "gateway", label: "Anycast CDN / WAF", x: 240, y: 170, health: "healthy", latency: 4, capacity: 25000, rps: 3500, role: "Edge Caching & Shield", industryTool: "Fastly / Cloudflare" },
-      { id: "surge-api1", type: "compute", label: "Ticketing Pod A", x: 460, y: 80, health: "healthy", latency: 25, capacity: 2500, rps: 1750, role: "Stateless App Compute", industryTool: "Node.js Pod" },
-      { id: "surge-api2", type: "compute", label: "Ticketing Pod B", x: 460, y: 260, health: "healthy", latency: 26, capacity: 2500, rps: 1750, role: "Stateless App Compute", industryTool: "Node.js Pod" },
-      { id: "surge-cache", type: "cache", label: "Redis Cluster (Reads)", x: 690, y: 60, health: "healthy", latency: 2, capacity: 50000, rps: 3000, role: "99% Cache Hit Ratio", industryTool: "Redis Sentinel" },
-      { id: "surge-queue", type: "queue", label: "Order Buffer (Writes)", x: 690, y: 260, health: "healthy", latency: 8, capacity: 20000, rps: 500, role: "Asynchronous Absorber", industryTool: "Kafka Broker" },
-      { id: "surge-db", type: "database", label: "Sharded PostgreSQL", x: 910, y: 170, health: "healthy", latency: 40, capacity: 1500, rps: 500, role: "Durable Write Master", industryTool: "PostgreSQL Shard" },
-    ],
-    connections: [
-      { id: "c-surge-1", from: "surge-crowd", to: "surge-cdn", status: "active", protocol: "HTTPS / Anycast" },
-      { id: "c-surge-2", from: "surge-cdn", to: "surge-api1", status: "active", protocol: "Round-Robin HTTP" },
-      { id: "c-surge-3", from: "surge-cdn", to: "surge-api2", status: "active", protocol: "Round-Robin HTTP" },
-      { id: "c-surge-4", from: "surge-api1", to: "surge-cache", status: "active", protocol: "Read Cache" },
-      { id: "c-surge-5", from: "surge-api2", to: "surge-cache", status: "active", protocol: "Read Cache" },
-      { id: "c-surge-6", from: "surge-api1", to: "surge-queue", status: "active", protocol: "Queue Write" },
-      { id: "c-surge-7", from: "surge-api2", to: "surge-queue", status: "active", protocol: "Queue Write" },
-      { id: "c-surge-8", from: "surge-queue", to: "surge-db", status: "active", protocol: "Drained Batch SQL" },
-    ],
-  },
-  {
-    id: "sre_observability",
-    name: "Enterprise SRE Observability & Tracing",
-    badge: "Observability",
-    description: "Full-fidelity monitoring: Microservices stream distributed OpenTelemetry traces to Prometheus and Grafana AlertManager, enabling sub-minute Mean Time to Detection (MTTD).",
-    nodes: [
-      { id: "sre-user", type: "client", label: "Enterprise Users", x: 40, y: 160, health: "healthy", latency: 12, capacity: 1000, rps: 120, role: "Active Users", industryTool: "Browser Web" },
-      { id: "sre-gateway", type: "gateway", label: "API Gateway", x: 260, y: 160, health: "healthy", latency: 5, capacity: 5000, rps: 120, role: "Ingress Router", industryTool: "Kong Gateway" },
-      { id: "sre-service", type: "compute", label: "Core Service", x: 500, y: 160, health: "healthy", latency: 30, capacity: 2000, rps: 120, role: "Business Logic", industryTool: "Go Microservice" },
-      { id: "sre-db", type: "database", label: "Primary Database", x: 740, y: 160, health: "healthy", latency: 45, capacity: 1000, rps: 120, role: "Storage Tier", industryTool: "PostgreSQL" },
-      { id: "sre-telemetry", type: "telemetry", label: "OTel Collector", x: 500, y: 370, health: "healthy", latency: 3, capacity: 10000, rps: 120, role: "Traces & Metrics Aggregator", industryTool: "OpenTelemetry" },
-    ],
-    connections: [
-      { id: "c-sre-1", from: "sre-user", to: "sre-gateway", status: "active", protocol: "HTTPS" },
-      { id: "c-sre-2", from: "sre-gateway", to: "sre-service", status: "active", protocol: "gRPC" },
-      { id: "c-sre-3", from: "sre-service", to: "sre-db", status: "active", protocol: "SQL" },
-      { id: "c-sre-4", from: "sre-gateway", to: "sre-telemetry", status: "active", protocol: "Ingress Traces" },
-      { id: "c-sre-5", from: "sre-service", to: "sre-telemetry", status: "active", protocol: "App Spans" },
-      { id: "c-sre-6", from: "sre-db", to: "sre-telemetry", status: "active", protocol: "Query Latencies" },
-    ],
-  },
-];
 
-const CHALLENGES: Challenge[] = [
-  {
-    id: "freeform",
-    course: "SANDBOX",
-    courseTitle: "Open Systems Foundry",
-    badge: "Freeform",
-    title: "Full Systems Architecture Lab",
-    goal: "Design, connect, and simulate any multi-tier cloud topology. Stress-test under traffic spikes and chaos engineering.",
-    hint: "Use the component palette to add nodes. Drag wire endpoints or use Connect Arrow tool to wire them.",
-    initialNodes: [],
-    initialConnections: [],
-    checkSuccess: () => true,
-  },
-  {
-    id: "c1_security",
-    course: "CSC2031",
-    courseTitle: "Security Programming",
-    badge: "CSC2031",
-    title: "Challenge 1: Shield the Naked Database",
-    goal: "Vulnerability detected! The client is querying the Database directly. Add an Auth Guard and an App Logic Server between them so unauthenticated users cannot tamper with records.",
-    hint: "Add an 'Auth & Security Guard' or 'API Gateway', and an 'App Logic Tier'. Reconnect the flow: Client -> Auth -> App -> DB.",
-    initialNodes: [
-      { id: "client-sec", type: "client", label: "Untrusted Client", x: 80, y: 180, health: "healthy", latency: 20, capacity: 100, rps: 50, role: "Public Browser", industryTool: "Browser" },
-      { id: "db-sec", type: "database", label: "Vulnerable DB", x: 620, y: 180, health: "degraded", latency: 40, capacity: 200, rps: 50, role: "Directly Exposed Database", industryTool: "PostgreSQL" },
-    ],
-    initialConnections: [
-      { id: "c-bad", from: "client-sec", to: "db-sec", status: "error", protocol: "DIRECT TCP (DANGEROUS)" },
-    ],
-    checkSuccess: (nodes, conns) => {
-      const hasAuth = nodes.some((n) => n.type === "auth" || n.type === "gateway");
-      const hasApp = nodes.some((n) => n.type === "compute");
-      const directDbConn = conns.some((c) => {
-        const fromNode = nodes.find((n) => n.id === c.from);
-        const toNode = nodes.find((n) => n.id === c.to);
-        return fromNode?.type === "client" && toNode?.type === "database";
-      });
-      return hasAuth && hasApp && !directDbConn;
-    },
-  },
-  {
-    id: "c2_design",
-    course: "CSC2035",
-    courseTitle: "Software Systems Design & Implementation",
-    badge: "CSC2035",
-    title: "Challenge 2: The Three-Tier Architecture",
-    goal: "Enforce separation of concerns: Room 1 (Client), Room 2 (App Logic), Room 3 (Database). Ensure rules and validation live strictly in the middle tier.",
-    hint: "Build a chain: Client -> App Logic Tier -> Authoritative Database.",
-    initialNodes: [
-      { id: "c2-client", type: "client", label: "Clinic Reception", x: 80, y: 180, health: "healthy", latency: 15, capacity: 300, rps: 50, role: "Presentation Room", industryTool: "Desktop Client" },
-      { id: "c2-db", type: "database", label: "Patient Booking DB", x: 680, y: 180, health: "healthy", latency: 50, capacity: 500, rps: 50, role: "Persistence Room", industryTool: "PostgreSQL" },
-    ],
-    initialConnections: [],
-    checkSuccess: (nodes, conns) => {
-      const hasApp = nodes.some((n) => n.type === "compute");
-      const clientToApp = conns.some((c) => {
-        const f = nodes.find((n) => n.id === c.from);
-        const t = nodes.find((n) => n.id === c.to);
-        return f?.type === "client" && t?.type === "compute";
-      });
-      const appToDb = conns.some((c) => {
-        const f = nodes.find((n) => n.id === c.from);
-        const t = nodes.find((n) => n.id === c.to);
-        return f?.type === "compute" && t?.type === "database";
-      });
-      return hasApp && clientToApp && appToDb;
-    },
-  },
-  {
-    id: "c3_cicd",
-    course: "CSC2033",
-    courseTitle: "Software Engineering Team Project",
-    badge: "CSC2033",
-    title: "Challenge 3: The Automated Andon Cord Pipeline",
-    goal: "Connect a Continuous Integration pipeline so that code changes pass through automated tests and secret scanning before joining the Production App.",
-    hint: "Wire Client/Developer -> CI Pipeline Runner -> App Server. Test what happens when you simulate a failing test.",
-    initialNodes: [
-      { id: "c3-dev", type: "client", label: "Developer Laptop", x: 80, y: 180, health: "healthy", latency: 10, capacity: 50, rps: 10, role: "Workbench", industryTool: "Git Workspace" },
-      { id: "c3-app", type: "compute", label: "Production Roster App", x: 680, y: 180, health: "healthy", latency: 25, capacity: 1000, rps: 10, role: "Live Service", industryTool: "Kubernetes Pod" },
-    ],
-    initialConnections: [],
-    checkSuccess: (nodes, conns) => {
-      const hasCi = nodes.some((n) => n.type === "ci");
-      const devToCi = conns.some((c) => {
-        const f = nodes.find((n) => n.id === c.from);
-        const t = nodes.find((n) => n.id === c.to);
-        return f?.type === "client" && t?.type === "ci";
-      });
-      const ciToApp = conns.some((c) => {
-        const f = nodes.find((n) => n.id === c.from);
-        const t = nodes.find((n) => n.id === c.to);
-        return f?.type === "ci" && t?.type === "compute";
-      });
-      return hasCi && devToCi && ciToApp;
-    },
-  },
-  {
-    id: "c4_scale",
-    course: "CSC3131",
-    courseTitle: "Development & Operations of Systems",
-    badge: "CSC3131",
-    title: "Challenge 4: The 10:00 AM Ticket Surge",
-    goal: "A massive rush of 10,000 requests/second is about to hit! The database can only handle 800 rps. Add a Distributed Cache (for reads) and a Queue (for async orders) to absorb the flood.",
-    hint: "Add both a 'Distributed Cache' and a 'Message Broker / Queue' connected to your App Logic Tier.",
-    initialNodes: [
-      { id: "c4-client", type: "client", label: "10:00 AM Crowd", x: 80, y: 180, health: "healthy", latency: 15, capacity: 10000, rps: 1200, role: "Traffic Surge", industryTool: "Web Browsers" },
-      { id: "c4-app", type: "compute", label: "Festival Ticketing API", x: 380, y: 180, health: "degraded", latency: 180, capacity: 1500, rps: 1200, role: "API Backend", industryTool: "Node.js Pod" },
-      { id: "c4-db", type: "database", label: "Ticket Database", x: 740, y: 180, health: "down", latency: 500, capacity: 500, rps: 1200, role: "Persistence (Crashed)", industryTool: "PostgreSQL" },
-    ],
-    initialConnections: [
-      { id: "c4-1", from: "c4-client", to: "c4-app", status: "active" },
-      { id: "c4-2", from: "c4-app", to: "c4-db", status: "error" },
-    ],
-    checkSuccess: (nodes, conns) => {
-      const hasCache = nodes.some((n) => n.type === "cache");
-      const hasQueue = nodes.some((n) => n.type === "queue");
-      const appConnectedToCache = conns.some((c) => {
-        const f = nodes.find((n) => n.id === c.from);
-        const t = nodes.find((n) => n.id === c.to);
-        return (f?.type === "compute" && t?.type === "cache") || (f?.type === "cache" && t?.type === "compute");
-      });
-      return hasCache && hasQueue && appConnectedToCache;
-    },
-  },
-  {
-    id: "c5_observability",
-    course: "CSC3131",
-    courseTitle: "Development & Operations of Systems",
-    badge: "CSC3131",
-    title: "Challenge 5: The 02:14 AM Observability Alert",
-    goal: "An intermittent crash is stranding night couriers! Add a Telemetry & SRE Agent so the system logs every trace and alerts on-call staff with the exact failing request before users report it.",
-    hint: "Place a 'Telemetry & SRE Agent' and link it to the App Logic Tier or Gateway.",
-    initialNodes: [
-      { id: "c5-client", type: "client", label: "Night Courier App", x: 80, y: 180, health: "healthy", latency: 20, capacity: 400, rps: 100, role: "Driver Handheld", industryTool: "Mobile App" },
-      { id: "c5-app", type: "compute", label: "Dispatch Gateway", x: 400, y: 180, health: "degraded", latency: 90, capacity: 800, rps: 100, role: "Dispatch Logic", industryTool: "Microservice" },
-      { id: "c5-db", type: "database", label: "GPS Tracking Store", x: 720, y: 180, health: "healthy", latency: 30, capacity: 600, rps: 100, role: "Location DB", industryTool: "PostgreSQL" },
-    ],
-    initialConnections: [
-      { id: "c5-1", from: "c5-client", to: "c5-app", status: "active" },
-      { id: "c5-2", from: "c5-app", to: "c5-db", status: "active" },
-    ],
-    checkSuccess: (nodes, conns) => {
-      const hasTelemetry = nodes.some((n) => n.type === "telemetry");
-      const linked = conns.some((c) => {
-        const f = nodes.find((n) => n.id === c.from);
-        const t = nodes.find((n) => n.id === c.to);
-        return f?.type === "telemetry" || t?.type === "telemetry";
-      });
-      return hasTelemetry && linked;
-    },
-  },
-  {
-    id: "c6_status",
-    course: "CSC3131",
-    courseTitle: "Development & Operations of Systems",
-    badge: "CSC3131",
-    title: "Challenge 6: The Status Request",
-    goal: "The payments desk asks for /status. The browser must not touch the ledger. Put a gateway between the desk and the application, and keep the database behind the application.",
-    hint: "Wire Client → Gateway → App, and App → Database. There must be no wire from the client to the database.",
-    initialNodes: [
-      { id: "c6-desk", type: "client", label: "Payments Desk", x: 80, y: 180, health: "healthy", latency: 12, capacity: 200, rps: 20, role: "Status Page", industryTool: "Browser" },
-      { id: "c6-db", type: "database", label: "Ledger", x: 760, y: 180, health: "healthy", latency: 40, capacity: 400, rps: 0, role: "Key and Records", industryTool: "PostgreSQL" },
-    ],
-    initialConnections: [],
-    checkSuccess: (nodes, conns) => {
-      const hasGateway = nodes.some((n) => n.type === "gateway");
-      const hasApp = nodes.some((n) => n.type === "compute");
-      const linked = (from: string, to: string) =>
-        conns.some((c) => {
-          const f = nodes.find((n) => n.id === c.from);
-          const t = nodes.find((n) => n.id === c.to);
-          return f?.type === from && t?.type === to;
-        });
-      const clientToDb = linked("client", "database") || linked("database", "client");
-      return hasGateway && hasApp && linked("client", "gateway") && linked("gateway", "compute") && linked("compute", "database") && !clientToDb;
-    },
-  },
-];
+type NodeMeta = {
+  name: string;
+  color: string;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
+  tool: string;
+  desc: string;
+};
 
+const GLYPH_ICON: Record<UmlGlyph, React.ComponentType<{ size?: number; className?: string }>> = {
+  class: IconCompute,
+  iface: IconPrinciple,
+  enum: IconCheck,
+  data: IconDatabase,
+  package: IconCompute,
+  actor: IconClient,
+  case: IconClient,
+  bound: IconGateway,
+  life: IconQueue,
+  frag: IconArchitect,
+  action: IconCompute,
+  decide: IconAuth,
+  start: IconPlay,
+  stop: IconClose,
+  end: IconClose,
+  fork: IconPause,
+  object: IconCompute,
+  lane: IconGateway,
+  comp: IconCompute,
+  port: IconGateway,
+  art: IconExport,
+  node: IconDatabase,
+  device: IconClient,
+  exec: IconCI,
+  state: IconAuth,
+  choice: IconAuth,
+  hist: IconRefresh,
+  model: IconArchitect,
+  frame: IconGateway,
+  ball: IconClient,
+  socket: IconConnect,
+  entity: IconDatabase,
+  weak: IconDatabase,
+  junction: IconConnect,
+  attr: IconPrinciple,
+  rel: IconAuth,
+  prompt: IconArchitect,
+  modelcard: IconCompute,
+  dataset: IconDatabase,
+  embed: IconQueue,
+  retriever: IconGateway,
+  agent: IconClient,
+  tool: IconCI,
+  guard: IconAuth,
+  eval: IconCheck,
+  serving: IconTelemetry,
+};
+
+function umlNodeMeta(): Record<UmlNodeType, NodeMeta> {
+  const meta = {} as Record<UmlNodeType, NodeMeta>;
+  for (const tool of UML_TOOLS) {
+    meta[tool.type] = { name: tool.name, color: "#d4d4d8", Icon: GLYPH_ICON[tool.glyph], tool: "", desc: tool.name };
+  }
+  return meta;
+}
+
+function drawnShape(type: string): boolean {
+  return isShape(type) || isExtensionType(type);
+}
+
+const nodeTypeMeta: Record<NodeType, NodeMeta> = {
+  client: { name: drawingTypeName("client"), color: "#1e293b", Icon: IconClient, tool: "Web / Mobile / React", desc: "User touchpoint that requests data and presents views." },
+  gateway: { name: drawingTypeName("gateway"), color: "#1e40af", Icon: IconGateway, tool: "Nginx / Envoy / Cloudflare", desc: "Routes traffic, terminates SSL, rate-limits, and shields backends." },
+  auth: { name: drawingTypeName("auth"), color: "#831843", Icon: IconAuth, tool: "Better Auth / JWT / OAuth", desc: "Verifies session identity, issues tokens, checks permissions." },
+  compute: { name: drawingTypeName("compute"), color: "#3730a3", Icon: IconCompute, tool: "Node.js / Go / Kubernetes Pod", desc: "Runs business rules, processes calculations, handles mutations." },
+  cache: { name: drawingTypeName("cache"), color: "#065f46", Icon: IconCache, tool: "Redis / Memcached", desc: "Delivers sub-millisecond responses for repeatable read data." },
+  database: { name: drawingTypeName("database"), color: "#78350f", Icon: IconDatabase, tool: "PostgreSQL / SQLite", desc: "Durable persistent storage that records ground truth." },
+  queue: { name: drawingTypeName("queue"), color: "#9a3412", Icon: IconQueue, tool: "Kafka / RabbitMQ / SQS", desc: "Decouples spikes by buffering async jobs and payments." },
+  ci: { name: drawingTypeName("ci"), color: "#0f766e", Icon: IconCI, tool: "GitHub Actions / GitLab CI", desc: "Runs automated linting, unit tests, secret scanning before deploy." },
+  telemetry: { name: drawingTypeName("telemetry"), color: "#115e59", Icon: IconTelemetry, tool: "Prometheus / Grafana / OTel", desc: "Gathers logs, metrics, traces, and triggers actionable alerts." },
+  text: { name: drawingTypeName("text"), color: "#e4e4e7", Icon: IconPrinciple, tool: "Label", desc: "Text" },
+  box: { name: drawingTypeName("box"), color: "#a1a1aa", Icon: IconCompute, tool: "Rectangle", desc: "Box" },
+  ellipse: { name: drawingTypeName("ellipse"), color: "#a1a1aa", Icon: IconClient, tool: "Ellipse", desc: "Ellipse" },
+  diamond: { name: drawingTypeName("diamond"), color: "#a1a1aa", Icon: IconAuth, tool: "Diamond", desc: "Diamond" },
+  cylinder: { name: drawingTypeName("cylinder"), color: "#a1a1aa", Icon: IconDatabase, tool: "Cylinder", desc: "Cylinder" },
+  cloud: { name: drawingTypeName("cloud"), color: "#a1a1aa", Icon: IconGateway, tool: "Cloud", desc: "Cloud" },
+  note: { name: drawingTypeName("note"), color: "#fbbf24", Icon: IconArchitect, tool: "Note", desc: "Note" },
+  ...umlNodeMeta(),
+};
+
+
+function entryKey(entry: ToolboxEntry): string {
+  if (entry.kind === "node") return `node:${entry.type}`;
+  if (entry.kind === "service") return `service:${entry.type}`;
+  if (entry.kind === "relation") return `relation:${entry.id}`;
+  return "wire:dataflow";
+}
+
+
+function downloadText(name: string, text: string, type: string) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 type CanvasToolMode = "select" | "pan" | "connect" | "disconnect" | "text";
 type BoardSnap = { nodes: SystemNode[]; connections: Connection[] };
 type Gesture =
@@ -485,9 +258,221 @@ function freshBoardId(prefix: string) {
   return `${prefix}-${boardSerial}`;
 }
 
-export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChallengeId?: string }) {
+function UmlLines({ lines }: { lines: string[] }) {
+  return (
+    <div className="min-h-4 flex-1 overflow-hidden border-t border-zinc-600 pt-0.5">
+      {lines.map((line, index) => (
+        <p key={`${index}-${line}`} className="truncate text-left text-[10px] leading-snug text-zinc-200">{line}</p>
+      ))}
+    </div>
+  );
+}
+
+function CrowFoot({ x, y, degrees, mark }: { x: number; y: number; degrees: number; mark: CrowMark }) {
+  const optional = mark === "optional" || mark === "optional-many";
+  const many = mark === "many" || mark === "optional-many";
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${degrees})`} aria-hidden="true">
+      {optional ? <circle cx={-16} cy={0} r={4} fill="none" stroke="#e4e4e7" strokeWidth={1.4} /> : null}
+      <path d="M -8 -7 V 7" fill="none" stroke="#e4e4e7" strokeWidth={1.4} />
+      {many ? <path d="M -8 0 L 2 -8 M -8 0 L 2 0 M -8 0 L 2 8" fill="none" stroke="#e4e4e7" strokeWidth={1.4} /> : <path d="M -8 0 H 2" fill="none" stroke="#e4e4e7" strokeWidth={1.4} />}
+    </g>
+  );
+}
+
+function UmlFace({ node, glyph, hideName }: { node: SystemNode; glyph: UmlGlyph; hideName: boolean }) {
+  const stereo = stereotypeLabel(node.stereotype);
+  const attrs = compartmentLines(node.attributes).map((line) => memberLine(line, node.visibility));
+  const ops = compartmentLines(node.operations).map((line) => memberLine(line, node.visibility));
+  const name = hideName ? "" : node.label;
+  const marks = [node.abstract ? "abstract" : "", node.leaf ? "leaf" : "", node.finalSpec ? "final" : "", node.active ? "active" : ""].filter(Boolean).join(", ");
+  if (glyph === "entity" || glyph === "weak" || glyph === "junction") {
+    return (
+      <div className={`relative z-10 flex h-full min-h-0 flex-col text-zinc-100 ${glyph === "weak" ? "outline outline-1 outline-offset-2 outline-zinc-300" : ""}`}>
+        <p className="truncate border-b border-zinc-500 pb-1 text-center text-xs font-bold">{name}</p>
+        <div className="min-h-0 flex-1 overflow-hidden pt-1 text-left">
+          {attrs.map((line, index) => (
+            <p key={`${index}-${line}`} className={`truncate text-[10px] leading-snug ${/^PK\b/i.test(line) ? "font-bold" : ""}`}>{line}</p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (glyph === "class" || glyph === "iface" || glyph === "data" || glyph === "enum" || glyph === "state" || glyph === "object" || glyph === "prompt" || glyph === "modelcard" || glyph === "dataset" || glyph === "embed" || glyph === "retriever" || glyph === "agent" || glyph === "tool" || glyph === "guard" || glyph === "eval" || glyph === "serving") {
+    return (
+      <div className="relative z-10 flex h-full min-h-0 flex-col text-center text-zinc-100">
+        {stereo ? <p className="truncate text-[10px] leading-tight text-zinc-300">{stereo}</p> : null}
+        {marks ? <p className="truncate text-[10px] leading-tight text-zinc-400">{marks}</p> : null}
+        {name ? <p className={`truncate text-xs font-bold ${glyph === "object" ? "underline" : ""} ${node.abstract ? "italic" : ""}`}>{name}</p> : null}
+        <UmlLines lines={attrs} />
+        {glyph === "enum" && ops.length === 0 ? null : <UmlLines lines={ops} />}
+      </div>
+    );
+  }
+  if (glyph === "actor") {
+    return (
+      <div className="relative z-10 flex h-full flex-col items-center text-zinc-100">
+        <svg viewBox="0 0 40 64" className="h-16 w-10" aria-hidden="true">
+          <circle cx="20" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M20 14 V36 M8 22 H32 M20 36 L8 56 M20 36 L32 56" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+        {name ? <p className="mt-1 truncate text-center text-xs font-bold">{name}</p> : null}
+      </div>
+    );
+  }
+  if (glyph === "start" || glyph === "stop" || glyph === "end" || glyph === "hist" || glyph === "ball" || glyph === "socket" || glyph === "port" || glyph === "fork") {
+    return (
+      <div className="relative z-10 flex h-full flex-col items-center justify-center text-zinc-100">
+        {glyph === "start" ? <span className="h-5 w-5 rounded-full bg-zinc-100" /> : null}
+        {glyph === "stop" ? <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-zinc-100"><span className="h-3 w-3 rounded-full bg-zinc-100" /></span> : null}
+        {glyph === "end" ? (
+          <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M8 8 L16 16 M16 8 L8 16" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+        ) : null}
+        {glyph === "hist" ? <span className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-100 text-xs font-bold">{name || "H"}</span> : null}
+        {glyph === "ball" ? <span className="h-4 w-4 rounded-full bg-zinc-100" /> : null}
+        {glyph === "socket" ? (
+          <svg viewBox="0 0 36 24" className="h-6 w-9" aria-hidden="true">
+            <path d="M2 12 H16" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M16 4 A8 8 0 0 1 16 20" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+        ) : null}
+        {glyph === "port" ? <span className="h-3.5 w-3.5 border border-zinc-100 bg-zinc-800" /> : null}
+        {glyph === "fork" ? <span className="h-2 w-full rounded-sm bg-zinc-100" /> : null}
+        {name && glyph !== "hist" ? <p className="mt-1 max-w-full truncate text-center text-[10px]">{name}</p> : null}
+      </div>
+    );
+  }
+  if (glyph === "decide" || glyph === "choice" || glyph === "action" || glyph === "case") {
+    return (
+      <div className="relative z-10 flex h-full flex-col items-center justify-center text-center text-zinc-100">
+        {stereo ? <p className="truncate text-[10px] text-zinc-300">{stereo}</p> : null}
+        {name ? <p className="truncate text-xs font-bold">{name}</p> : null}
+      </div>
+    );
+  }
+  if (glyph === "life") {
+    return (
+      <div className="relative z-10 flex h-full flex-col items-center text-zinc-100">
+        <div className="w-full border border-zinc-400 bg-zinc-800 px-1 py-1 text-center">
+          {stereo ? <p className="truncate text-[10px] text-zinc-300">{stereo}</p> : null}
+          {name ? <p className="truncate text-xs font-bold">{name}</p> : null}
+        </div>
+        <div className="mt-1 w-px flex-1 border-l border-dashed border-zinc-300" />
+      </div>
+    );
+  }
+  if (glyph === "package" || glyph === "model") {
+    return (
+      <div className="relative z-10 h-full text-zinc-100">
+        <div className="absolute left-0 top-0 flex max-w-[80%] items-center gap-1 border border-zinc-400 bg-zinc-800 px-2 py-0.5 text-[10px] font-bold">
+          {glyph === "model" ? <span className="inline-block h-0 w-0 border-y-[4px] border-l-[7px] border-y-transparent border-l-zinc-100" /> : null}
+          <span className="truncate">{name || stereo}</span>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 top-5 border border-zinc-400" />
+      </div>
+    );
+  }
+  if (glyph === "frame" || glyph === "frag" || glyph === "bound" || glyph === "lane") {
+    return (
+      <div className={`relative z-10 h-full text-zinc-100 ${glyph === "bound" ? "border border-dashed border-zinc-400" : "border border-zinc-400"} ${glyph === "lane" ? "flex flex-col" : ""}`}>
+        <div className={`${glyph === "lane" ? "border-b border-zinc-400 py-1 text-center" : "inline-block border-b border-r border-zinc-400 px-2 py-0.5"} text-[10px] font-bold`}>
+          {stereo || name}
+        </div>
+        {name && stereo ? <p className="truncate px-2 pt-1 text-xs font-bold">{name}</p> : null}
+        {glyph === "frag" || glyph === "lane" ? (
+          <div className="px-2 pt-1">{attrs.map((line, index) => <p key={`${index}-${line}`} className="truncate text-[10px]">{line}</p>)}</div>
+        ) : null}
+      </div>
+    );
+  }
+  if (glyph === "comp") {
+    return (
+      <div className="relative z-10 h-full pl-4 text-zinc-100">
+        <span className="absolute left-0 top-2 h-2.5 w-4 border border-zinc-300 bg-zinc-800" />
+        <span className="absolute left-0 top-6 h-2.5 w-4 border border-zinc-300 bg-zinc-800" />
+        {stereo ? <p className="truncate text-center text-[10px] text-zinc-300">{stereo}</p> : null}
+        {name ? <p className="truncate text-center text-xs font-bold">{name}</p> : null}
+      </div>
+    );
+  }
+  if (glyph === "art") {
+    return (
+      <div className="relative z-10 h-full border border-zinc-400 bg-zinc-800 p-1 text-zinc-100" style={{ clipPath: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)" }}>
+        <span className="absolute right-0 top-0 h-3.5 w-3.5 border-b border-l border-zinc-400 bg-zinc-700" />
+        {stereo ? <p className="truncate text-[10px] text-zinc-300">{stereo}</p> : null}
+        {name ? <p className="truncate text-xs font-bold">{name}</p> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="relative z-10 h-full text-zinc-100">
+      <div className="absolute left-3 right-0 top-0 h-3 border border-zinc-400 bg-zinc-700" style={{ transform: "skewX(-28deg)" }} />
+      <div className="absolute inset-x-0 bottom-0 top-3 border border-zinc-400 bg-zinc-800 p-1">
+        {stereo ? <p className="truncate text-center text-[10px] text-zinc-300">{stereo}</p> : null}
+        {name ? <p className="truncate text-center text-xs font-bold">{name}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function LanguageIcon({ id }: { id: ModelLanguage }) {
+  const pen = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.6,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const,
+  };
+  if (id === "uml") {
+    return <svg {...pen}><path d="M12 3.5 19.5 8v8L12 20.5 4.5 16V8L12 3.5Z" /><path d="M12 12.2 19.5 8M12 12.2v8.3M12 12.2 4.5 8" /></svg>;
+  }
+  if (id === "erd") {
+    return <svg {...pen}><rect x="4" y="5" width="16" height="14" rx="1.5" /><path d="M4 9.5h16M10 9.5V19" /></svg>;
+  }
+  if (id === "dataflow") {
+    return <svg {...pen}><path d="M12 4.5v15M12 4.5 9 7.5M12 4.5l3 3M12 19.5 9 16.5M12 19.5l3-3" /></svg>;
+  }
+  if (id === "flowchart") {
+    return <svg {...pen}><path d="m12 3.5 8.5 8.5L12 20.5 3.5 12 12 3.5Z" /></svg>;
+  }
+  if (id === "mindmap") {
+    return <svg {...pen}><path d="M9.2 17.5a3.4 3.4 0 0 1-1.6-6.4 3.6 3.6 0 0 1 2.8-4.6A3.3 3.3 0 0 1 15 8.2a3.1 3.1 0 0 1 2.4 5.2 3.3 3.3 0 0 1-2.2 5.6H9.6" /><path d="M12 8.8v6.2" /></svg>;
+  }
+  if (id === "c4") {
+    return <svg {...pen}><rect x="9" y="3.5" width="6" height="4" rx="1" /><rect x="3" y="16" width="6" height="4" rx="1" /><rect x="15" y="16" width="6" height="4" rx="1" /><path d="M12 7.5v4M6 16v-4.5h12V16" /></svg>;
+  }
+  if (id === "sysml") {
+    return <svg {...pen}><path d="M3.5 20V10.5l4 2V10l4 2V8.5l4 2.5V9l4.5 2.8V20H3.5Z" /><path d="M8 20v-3h3v3" /></svg>;
+  }
+  if (id === "bpmn") {
+    return <svg {...pen}><circle cx="12" cy="6.5" r="2" /><path d="M12 8.7v4.2M9.2 11.2h5.6M12 12.9 9.6 17.5M12 12.9l2.4 4.6" /><circle cx="6" cy="17.2" r="1.1" /><circle cx="18" cy="17.2" r="1.1" /></svg>;
+  }
+  if (id === "wireframe") {
+    return <svg {...pen}><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 8.5h17" /><circle cx="6.2" cy="6.5" r="0.6" fill="currentColor" /></svg>;
+  }
+  if (id === "aws") {
+    return <svg {...pen}><path d="M7.2 17.5h9.4a3.4 3.4 0 0 0 .3-6.8 4.6 4.6 0 0 0-8.8-1A3.3 3.3 0 0 0 7.2 17.5Z" /></svg>;
+  }
+  if (id === "gcp") {
+    return <svg {...pen}><rect x="5" y="5" width="14" height="4.2" rx="1.3" /><rect x="5" y="11.4" width="14" height="4.2" rx="1.3" /></svg>;
+  }
+  if (id === "azure") {
+    return <svg {...pen}><rect x="4" y="6" width="16" height="12" rx="2" /><path d="M4 10.2h16M8 14.2h3" /><circle cx="15.6" cy="14.2" r="0.7" fill="currentColor" /></svg>;
+  }
+  return <svg {...pen}><path d="M12 3.5v3.2M12 17.3V20.5M3.5 12h3.2M17.3 12H20.5M6.2 6.2l2.2 2.2M15.6 15.6l2.2 2.2M17.8 6.2l-2.2 2.2M8.4 15.6 6.2 17.8" /></svg>;
+}
+
+export function FoundryLab({ m, initialChallengeId, initialStudio }: { m: Messages; initialChallengeId?: string; initialStudio?: string }) {
   const { me, refresh } = useKeel();
   const validInitial = CHALLENGES.find((c) => c.id === initialChallengeId);
+  const studio = UML_FAMILIES.some((family) => family.id === initialStudio) ? initialStudio as UmlFamily : "class";
   const [activeChallenge, setActiveChallenge] = useState<ChallengeId>(validInitial ? (initialChallengeId as ChallengeId) : "freeform");
   const [nodes, setNodes] = useState<SystemNode[]>(validInitial ? validInitial.initialNodes : CHALLENGES[0].initialNodes);
   const [connections, setConnections] = useState<Connection[]>(validInitial ? validInitial.initialConnections : CHALLENGES[0].initialConnections);
@@ -532,6 +517,30 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   const [zoom, setZoom] = useState(1);
   const [snap, setSnap] = useState(true);
   const [wireStyle, setWireStyle] = useState<WireStyle>("curve");
+  const [umlFamily, setUmlFamily] = useState<UmlFamily>(studio);
+  const [relationKind, setRelationKind] = useState<UmlRelation | "">("");
+  const [sheets, setSheets] = useState<DiagramSheet[]>([{ id: "diagram-1", name: "Diagram 1", family: studio, nodes: validInitial ? validInitial.initialNodes : [], connections: validInitial ? validInitial.initialConnections : [] }]);
+  const [sheetId, setSheetId] = useState("diagram-1");
+  const [showExplorer, setShowExplorer] = useState(false);
+  const [showExtensions, setShowExtensions] = useState(false);
+  const [showAi, setShowAi] = useState(false);
+  const [showMermaid, setShowMermaid] = useState(false);
+  const [sketchWire, setSketchWire] = useState(true);
+  const [showModeling, setShowModeling] = useState(false);
+  const [showCommands, setShowCommands] = useState(false);
+  const [modelIssues, setModelIssues] = useState<ModelIssue[]>([]);
+  const [modelBusy, setModelBusy] = useState(false);
+  const [modelNote, setModelNote] = useState("");
+  const [shareRoomName, setShareRoomName] = useState("");
+  const [shareOn, setShareOn] = useState(false);
+  const [codeLanguage, setCodeLanguage] = useState<SketchLanguage>("java");
+  const [sketchText, setSketchText] = useState("");
+  const [deskLines, setDeskLines] = useState<string[]>([]);
+  const [looseShapes, setLooseShapes] = useState<{ id: string; label: string }[]>([]);
+  const [printPage, setPrintPage] = useState<"a4" | "letter">("a4");
+  const [extensionCommands, setExtensionCommands] = useState<ExtensionCommand[]>([]);
+  const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, readCanvasTheme, () => "dark" as const);
+  const [extensionTools, setExtensionTools] = useState<ExtensionTool[]>([]);
   const [showRail, setShowRail] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
@@ -543,6 +552,16 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   const particleIdRef = useRef(1);
   const nodesRef = useRef(nodes);
   const connectionsRef = useRef(connections);
+  const sheetsRef = useRef(sheets);
+  const sheetIdRef = useRef(sheetId);
+  const shareClient = useRef("");
+  const shareEcho = useRef(false);
+  const shareSkip = useRef(true);
+  const shareOnRef = useRef(false);
+  const shareRoomRef = useRef("");
+  const shareChannel = useRef<BroadcastChannel | null>(null);
+  const shareApply = useRef<(project: unknown) => void>(() => {});
+  const shareSend = useRef<() => void>(() => {});
   const historyRef = useRef<{ past: BoardSnap[]; future: BoardSnap[] }>({ past: [], future: [] });
   const editRemembered = useRef(false);
   const zoomRef = useRef(zoom);
@@ -556,14 +575,55 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     copy: () => {},
     remove: () => {},
   });
+  const paletteRef = useRef<() => void>(() => {});
+  const checkToken = useRef(0);
+  const extensionRun = useRef<(command: ExtensionCommand) => void>(() => {});
 
   useEffect(() => {
     nodesRef.current = nodes;
     connectionsRef.current = connections;
+    sheetsRef.current = sheets;
+    sheetIdRef.current = sheetId;
     zoomRef.current = zoom;
     snapRef.current = snap;
     gestureRef.current = gesture;
-  }, [nodes, connections, zoom, snap, gesture]);
+  }, [nodes, connections, sheets, sheetId, zoom, snap, gesture]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const view = viewportRef.current;
+      const scale = zoomRef.current || 1;
+      if (!view) return;
+      const reveal = (x: number, y: number, w: number, h: number) => {
+        const top = Math.max(0, y * scale - 12);
+        const bottom = (y + h + 16) * scale;
+        const left = Math.max(0, x * scale - 12);
+        const right = (x + w + 16) * scale;
+        if (bottom - top > view.clientHeight) view.scrollTop = Math.max(0, bottom - view.clientHeight);
+        else if (bottom > view.scrollTop + view.clientHeight) view.scrollTop = bottom - view.clientHeight;
+        else if (top < view.scrollTop) view.scrollTop = top;
+        if (right - left > view.clientWidth) view.scrollLeft = Math.max(0, right - view.clientWidth);
+        else if (right > view.scrollLeft + view.clientWidth) view.scrollLeft = right - view.clientWidth;
+        else if (left < view.scrollLeft) view.scrollLeft = left;
+      };
+      const node = nodesRef.current.find((item) => item.id === selectedNodeId);
+      if (node) {
+        const size = nodeSize(node);
+        reveal(node.x, node.y, size.w, size.h);
+      }
+      const conn = connectionsRef.current.find((item) => item.id === selectedConnId);
+      const from = nodesRef.current.find((item) => item.id === conn?.from);
+      const to = nodesRef.current.find((item) => item.id === conn?.to);
+      if (from && to) {
+        const fromSize = nodeSize(from);
+        const toSize = nodeSize(to);
+        const x = Math.min(from.x, to.x);
+        const y = Math.min(from.y, to.y);
+        reveal(x, y, Math.max(from.x + fromSize.w, to.x + toSize.w) - x, Math.max(from.y + fromSize.h, to.y + toSize.h) - y);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedNodeId, selectedConnId]);
 
   const boardPoint = useCallback((clientX: number, clientY: number) => {
     const rect = boardRef.current?.getBoundingClientRect();
@@ -664,7 +724,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   // Tidy / Auto-Layout Architecture Tool (Places nodes into neat, non-overlapping enterprise tiers)
   const tidyArchitecture = (source?: SystemNode[], record = true) => {
-    const tierMap: Record<NodeType, number> = {
+    const tierMap: Partial<Record<NodeType, number>> = {
       client: 0,
       gateway: 1,
       auth: 1,
@@ -674,26 +734,19 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       queue: 3,
       database: 4,
       telemetry: 5,
-      text: 6,
-      box: 6,
-      ellipse: 6,
-      diamond: 6,
-      cylinder: 6,
-      cloud: 6,
-      note: 6,
     };
 
     const list = source ?? nodesRef.current;
     if (record) remember();
     const tiers: Record<number, SystemNode[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     for (const node of list) {
-      if (isShape(node.type)) continue;
+      if (drawnShape(node.type)) continue;
       const tier = tierMap[node.type] ?? 2;
       tiers[tier].push(node);
     }
 
     const updated = list.map((node) => {
-      if (isShape(node.type)) return node;
+      if (drawnShape(node.type)) return node;
       const tier = tierMap[node.type] ?? 2;
       const tierList = tiers[tier] ?? [];
       const indexInTier = tierList.findIndex((n) => n.id === node.id);
@@ -722,11 +775,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setAiAnalyzing(true);
 
     // 1. Rule-based heuristic verification
-    const hasDirectDb = connections.some((c) => {
-      const f = nodes.find((n) => n.id === c.from);
-      const t = nodes.find((n) => n.id === c.to);
-      return f?.type === "client" && t?.type === "database";
-    });
+    const hasDirectDb = clientReachesDatabase(nodes, connections);
     const hasCompute = nodes.some((n) => n.type === "compute");
     const hasDown = nodes.some((n) => n.health === "down");
     const isolatedNodes = nodes.filter((n) => !connections.some((c) => c.from === n.id || c.to === n.id));
@@ -839,11 +888,12 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   // Run AI analysis on topology change (debounced)
   useEffect(() => {
+    if (!architectShouldWatch(fullPage, showAiGuide)) return;
     const timer = setTimeout(() => {
       void runAiDiagnostic();
     }, 600);
     return () => clearTimeout(timer);
-  }, [nodes.length, connections.length, trafficMultiplier, runAiDiagnostic]);
+  }, [nodes.length, connections.length, trafficMultiplier, runAiDiagnostic, fullPage, showAiGuide]);
 
   // Mission progress follows the drawing. The award itself is deferred so it is not a render cascade.
   useEffect(() => {
@@ -881,6 +931,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       const fromNode = nodes.find((n) => n.id === randomConn.from);
       const toNode = nodes.find((n) => n.id === randomConn.to);
       if (!fromNode || !toNode || fromNode.health === "down") return;
+      if (umlGlyph(fromNode.type) || umlGlyph(toNode.type) || drawnShape(fromNode.type) || drawnShape(toNode.type) || relationKindOf(randomConn.kind)) return;
 
       let pType: Particle["type"] = "request";
       let pLabel = "HTTP GET /api/v1/feed";
@@ -1073,22 +1124,27 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   // Connect Nodes helper
   const makeConnection = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
+    const kind = relationKindOf(relationKind);
+    if (fromId === toId && !kind) return;
     const exists = connections.some(
-      (c) => (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId)
+      (c) => (c.from === fromId && c.to === toId) || (fromId !== toId && c.from === toId && c.to === fromId)
     );
     if (!exists) {
       const fromNode = nodes.find((n) => n.id === fromId);
       const toNode = nodes.find((n) => n.id === toId);
       const isDangerous = fromNode?.type === "client" && toNode?.type === "database";
+      const look = relationLook(kind);
 
       const newConn: Connection = {
         id: freshBoardId("c"),
         from: fromId,
         to: toId,
         status: isDangerous ? "error" : "active",
-        protocol: isDangerous ? "DIRECT TCP (VULNERABLE)" : "HTTPS / Dataflow",
+        protocol: isDangerous ? "DIRECT TCP (VULNERABLE)" : look ? look.label : "HTTPS / Dataflow",
         style: wireStyle,
+        kind: kind || undefined,
+        fromMult: kind === "crows" ? "1" : undefined,
+        toMult: kind === "crows" ? "*" : undefined,
       };
       remember();
       const next = [...connectionsRef.current, newConn];
@@ -1122,7 +1178,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     }
     if (toolMode === "connect" || connectFromId) {
       if (connectFromId) {
-        if (connectFromId !== id) {
+        if (connectFromId !== id || relationKindOf(relationKind)) {
           makeConnection(connectFromId, id);
         }
         setConnectFromId(null);
@@ -1173,37 +1229,47 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   const endPortConnect = (targetNodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (connectFromId && connectFromId !== targetNodeId) {
+    if (connectFromId && (connectFromId !== targetNodeId || relationKindOf(relationKind))) {
       makeConnection(connectFromId, targetNodeId);
     }
     setConnectFromId(null);
   };
 
-  function visibleOrigin() {
+  function visibleOrigin(type?: string) {
     const view = viewportRef.current;
     const board = boardRef.current;
-    const count = nodesRef.current.length;
-    if (!view || !board) return { x: 80 + (count % 4) * 36, y: 80 + (count % 3) * 28 };
+    const size = nodeSize({ type });
+    const previous = nodesRef.current[nodesRef.current.length - 1];
+    if (!view || !board) {
+      if (!previous) return { x: 80, y: 80 };
+      return { x: previous.x, y: previous.y + nodeSize(previous).h + 36 };
+    }
     const boardRect = board.getBoundingClientRect();
     const viewRect = view.getBoundingClientRect();
     const scale = zoomRef.current || 1;
-    return {
-      x: Math.max(0, (viewRect.left + 56 - boardRect.left) / scale + (count % 5) * 24),
-      y: Math.max(0, (viewRect.top + 72 - boardRect.top) / scale + (count % 3) * 24),
-    };
+    const originX = Math.max(0, (viewRect.left + 40 - boardRect.left) / scale);
+    const originY = Math.max(0, (viewRect.top + 48 - boardRect.top) / scale);
+    if (!previous) return { x: originX, y: originY };
+    const prev = nodeSize(previous);
+    const beside = previous.x + prev.w + 120;
+    if (viewRect.width >= 700 && beside + size.w < originX + viewRect.width / scale - 16) {
+      return { x: beside, y: previous.y };
+    }
+    return { x: originX, y: previous.y + prev.h + 36 };
   }
 
   // CRUD: Add Node
   const addNode = (type: NodeType, at?: { x: number; y: number }) => {
     const meta = nodeTypeMeta[type];
-    const spot = at ?? visibleOrigin();
+    const spot = at ?? visibleOrigin(type);
     const id = freshBoardId(type);
     const size = nodeSize({ type });
     const drawing = isShape(type);
+    const uml = umlTool(type);
     const newNode: SystemNode = {
       id,
       type,
-      label: meta.name.split("/")[0].trim(),
+      label: type === "uml-hist" ? "H" : meta.name.split("/")[0].trim(),
       x: Math.max(0, spot.x),
       y: Math.max(0, spot.y),
       w: drawing ? size.w : undefined,
@@ -1215,6 +1281,12 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       rps: drawing ? 0 : 50,
       role: drawing ? "" : meta.desc,
       industryTool: drawing ? "" : meta.tool,
+      ...(uml ? {
+        stereotype: uml.stereotype ?? "",
+        attributes: type === "erd-entity" || type === "erd-weak" ? "PK id" : type === "erd-assoc" ? "PK id\nFK leftId\nFK rightId" : "",
+        operations: "",
+        visibility: type.startsWith("uml-") ? "public" as const : undefined,
+      } : {}),
     };
     remember();
     const next = [...nodesRef.current, newNode];
@@ -1225,6 +1297,114 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     if (type === "text") setEditingId(id);
     setToast({ message: `Added ${meta.name}`, type: "success" });
   };
+
+  function addExtensionNode(tool: ExtensionTool) {
+    const spot = visibleOrigin(tool.id);
+    const id = freshBoardId(tool.id);
+    const newNode: SystemNode = {
+      id,
+      type: tool.id as NodeType,
+      label: tool.label,
+      x: Math.max(0, spot.x),
+      y: Math.max(0, spot.y),
+      w: tool.w,
+      h: tool.h,
+      z: nodesRef.current.length + 1,
+      health: "healthy",
+      latency: 0,
+      capacity: 0,
+      rps: 0,
+      role: "",
+      industryTool: "",
+      stereotype: tool.stereotype,
+    };
+    remember();
+    const next = [...nodesRef.current, newNode];
+    nodesRef.current = next;
+    setNodes(next);
+    setSelectedNodeId(id);
+    setSelectedConnId(null);
+    setToast({ message: `Added ${tool.name}`, type: "success" });
+  }
+
+  function applyExtensionPatch(patch: AcceptedPatch) {
+    const removed = new Set(patch.deleteNodes);
+    let nextNodes = nodesRef.current
+      .filter((node) => !removed.has(node.id))
+      .map((node) => {
+        const change = patch.updateNodes.find((item) => item.id === node.id);
+        if (!change) return node;
+        return {
+          ...node,
+          label: change.label ?? node.label,
+          x: change.x ?? node.x,
+          y: change.y ?? node.y,
+          stereotype: change.stereotype ?? node.stereotype,
+          attributes: change.attributes ?? node.attributes,
+        };
+      });
+    const keys = new Map<string, string>();
+    remember();
+    nodesRef.current = nextNodes;
+    for (const add of patch.addNodes) {
+      const meta = nodeTypeMeta[add.type as NodeType];
+      const extension = extensionTools.find((item) => item.id === add.type);
+      const uml = umlTool(add.type);
+      const drawing = drawnShape(add.type);
+      const spot = add.x < 0 || add.y < 0 ? visibleOrigin(add.type) : { x: add.x, y: add.y };
+      const id = freshBoardId(add.type);
+      if (add.key) keys.set(add.key, id);
+      const width = extension?.w ?? uml?.w ?? nodeSize({ type: add.type }).w;
+      const height = extension?.h ?? uml?.h ?? nodeSize({ type: add.type }).h;
+      const created: SystemNode = {
+        id,
+        type: add.type as NodeType,
+        label: add.label || extension?.label || (meta ? meta.name.split("/")[0].trim() : add.type),
+        x: Math.max(0, spot.x),
+        y: Math.max(0, spot.y),
+        w: drawing ? width : undefined,
+        h: drawing ? height : undefined,
+        z: nodesRef.current.length + 1,
+        health: "healthy",
+        latency: add.type === "cache" ? 2 : add.type === "database" ? 45 : drawing ? 0 : 20,
+        capacity: add.type === "gateway" ? 5000 : drawing ? 0 : 1000,
+        rps: drawing ? 0 : 50,
+        role: drawing || !meta ? "" : meta.desc,
+        industryTool: drawing || !meta ? "" : meta.tool,
+        stereotype: add.stereotype || extension?.stereotype || uml?.stereotype || undefined,
+      };
+      nextNodes = [...nextNodes, created];
+      nodesRef.current = nextNodes;
+    }
+    const alive = new Set(nextNodes.map((node) => node.id));
+    let nextConnections = connectionsRef.current.filter((link) => !patch.deleteConnections.includes(link.id) && alive.has(link.from) && alive.has(link.to));
+    for (const add of patch.addConnections) {
+      const from = keys.get(add.from) ?? add.from;
+      const to = keys.get(add.to) ?? add.to;
+      if (!alive.has(from) || !alive.has(to) || from === to) continue;
+      const fromNode = nextNodes.find((node) => node.id === from);
+      const toNode = nextNodes.find((node) => node.id === to);
+      const look = relationLook(add.kind);
+      const bothDrawn = fromNode && toNode ? drawnShape(fromNode.type) && drawnShape(toNode.type) : false;
+      nextConnections = [...nextConnections, {
+        id: freshBoardId("c"),
+        from,
+        to,
+        status: "active" as const,
+        protocol: add.label || look?.label || (bothDrawn ? "Link" : "HTTPS / Dataflow"),
+        style: wireStyle,
+        kind: relationKindOf(add.kind) || undefined,
+      }];
+    }
+    nodesRef.current = nextNodes;
+    connectionsRef.current = nextConnections;
+    setNodes(nextNodes);
+    setConnections(nextConnections);
+    const selectedStill = nextNodes.some((node) => node.id === selectedNodeId);
+    if (!selectedStill) setSelectedNodeId(nextNodes[nextNodes.length - 1]?.id ?? null);
+    setSelectedConnId(null);
+    setToast({ message: patch.summary, type: "success" });
+  }
 
   function startResize(id: string, event: React.PointerEvent) {
     event.stopPropagation();
@@ -1325,6 +1505,34 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setConnections(next);
   }
 
+  function chooseRelation(value: string) {
+    const kind = relationKindOf(value);
+    setRelationKind(kind);
+    if (!selectedConnId) return;
+    remember();
+    const look = relationLook(kind);
+    const next = connectionsRef.current.map((conn) => {
+      if (conn.id !== selectedConnId) return conn;
+      const stock = !conn.protocol || conn.protocol === "HTTPS / Dataflow" || conn.protocol.startsWith("«");
+      return {
+        ...conn,
+        kind: kind || undefined,
+        protocol: stock ? (kind ? look?.label || "" : "HTTPS / Dataflow") : conn.protocol,
+      };
+    });
+    connectionsRef.current = next;
+    setConnections(next);
+  }
+
+  function updateSelectedConn(patch: Partial<Connection>) {
+    if (!selectedConnId) return;
+    setConnections((prev) => {
+      const next = prev.map((conn) => (conn.id === selectedConnId ? { ...conn, ...patch } : conn));
+      connectionsRef.current = next;
+      return next;
+    });
+  }
+
   function zoomBy(factor: number) {
     setZoom((current) => Math.min(2, Math.max(0.25, Math.round(current * factor * 100) / 100)));
   }
@@ -1351,11 +1559,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   // Auto-Fix via AI Guide (Applies recommended architecture)
   const applyRecommendedFix = () => {
     // 1. Remove dangerous direct client-to-db connections
-    const cleanConns = connections.filter((c) => {
-      const f = nodes.find((n) => n.id === c.from);
-      const t = nodes.find((n) => n.id === c.to);
-      return !(f?.type === "client" && t?.type === "database");
-    });
+    const cleanConns = connections.filter((link) => !linkIsClientToDatabase(nodes, link));
 
     let currentNodes = [...nodes];
     const newConns = [...cleanConns];
@@ -1431,7 +1635,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
   // Chaos: Simulate Node Outage (Fault Injection)
   const triggerChaos = () => {
-    const aliveNodes = nodes.filter((n) => n.health !== "down" && n.type !== "client" && !isShape(n.type));
+    const aliveNodes = nodes.filter((n) => n.health !== "down" && n.type !== "client" && !drawnShape(n.type));
     if (aliveNodes.length === 0) return;
     const target = aliveNodes[Math.floor(Math.random() * aliveNodes.length)];
     setNodes((prev) =>
@@ -1494,67 +1698,199 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     setToast({ message: "Blank canvas", type: "info" });
   }
 
+  function currentSheets(name?: string, family?: UmlFamily): DiagramSheet[] {
+    return sheetsRef.current.map((sheet) => (
+      sheet.id === sheetIdRef.current
+        ? { ...sheet, name: name ?? sheet.name, family: family ?? umlFamily, nodes: nodesRef.current, connections: connectionsRef.current }
+        : sheet
+    ));
+  }
+
+  function armRelation(family: UmlFamily) {
+    if (family === "dataflow") {
+      if (relationKind) setRelationKind("");
+      return;
+    }
+    if (relationKind && !relationsFor(family).some((relation) => relation.id === relationKind)) setRelationKind("");
+  }
+
+  function rememberFamily(family: UmlFamily) {
+    setUmlFamily(family);
+    const saved = currentSheets(undefined, family);
+    sheetsRef.current = saved;
+    setSheets(saved);
+    armRelation(family);
+  }
+
+  function chooseLanguage(language: ModelLanguage) {
+    const next = language === "uml" && languageOf(umlFamily) === "uml" ? umlFamily : defaultFamily(language);
+    if (next === umlFamily) return;
+    rememberFamily(next);
+  }
+
+  function chooseDiagram(family: UmlFamily) {
+    if (languageOf(family) !== "uml" || family === umlFamily) return;
+    rememberFamily(family);
+  }
+
+  function loadSheet(target: DiagramSheet) {
+    nodesRef.current = target.nodes;
+    connectionsRef.current = target.connections;
+    setNodes(target.nodes);
+    setConnections(target.connections);
+    setUmlFamily(target.family);
+    setActiveChallenge("freeform");
+    setSelectedNodeId(null);
+    setSelectedConnId(null);
+    setConnectFromId(null);
+    setParticles([]);
+    armRelation(target.family);
+  }
+
+  function openSheet(id: string) {
+    if (id === sheetIdRef.current) return;
+    const saved = currentSheets();
+    const target = saved.find((sheet) => sheet.id === id);
+    if (!target) return;
+    sheetsRef.current = saved;
+    setSheets(saved);
+    setSheetId(id);
+    sheetIdRef.current = id;
+    loadSheet(target);
+  }
+
+  function newDiagram() {
+    const saved = currentSheets();
+    const id = freshBoardId("diagram");
+    const blank: DiagramSheet = { id, name: `Diagram ${saved.length + 1}`, family: umlFamily, nodes: [], connections: [] };
+    const next = [...saved, blank];
+    sheetsRef.current = next;
+    setSheets(next);
+    setSheetId(id);
+    sheetIdRef.current = id;
+    loadSheet(blank);
+  }
+
+  function renameSheet(name: string) {
+    const next = currentSheets(name);
+    sheetsRef.current = next;
+    setSheets(next);
+  }
+
   function openDrawing(file: File) {
     file.text().then((text) => {
-      const data = JSON.parse(text) as { nodes?: unknown; connections?: unknown };
-      if (!Array.isArray(data.nodes)) throw new Error("nodes");
-      const nextNodes: SystemNode[] = [];
-      for (const item of data.nodes) {
-        if (!item || typeof item !== "object") continue;
-        const raw = item as Partial<SystemNode>;
-        if (typeof raw.id !== "string" || typeof raw.type !== "string" || !nodeTypeMeta[raw.type as NodeType]) continue;
-        if (typeof raw.x !== "number" || typeof raw.y !== "number") continue;
-        const type = raw.type as NodeType;
-        nextNodes.push({
-          id: raw.id,
-          type,
-          label: typeof raw.label === "string" ? raw.label : nodeTypeMeta[type].name,
-          x: raw.x,
-          y: raw.y,
-          w: typeof raw.w === "number" ? raw.w : undefined,
-          h: typeof raw.h === "number" ? raw.h : undefined,
-          z: typeof raw.z === "number" ? raw.z : undefined,
-          health: raw.health === "down" || raw.health === "degraded" ? raw.health : "healthy",
-          latency: typeof raw.latency === "number" ? raw.latency : 20,
-          capacity: typeof raw.capacity === "number" ? raw.capacity : 1000,
-          rps: typeof raw.rps === "number" ? raw.rps : 0,
-          role: typeof raw.role === "string" ? raw.role : "",
-          industryTool: typeof raw.industryTool === "string" ? raw.industryTool : "",
+      const data = JSON.parse(text) as { nodes?: unknown; connections?: unknown; sheets?: unknown };
+      const stored = readStoredProject(data);
+      if (!stored) throw new Error("nodes");
+      if (Array.isArray(data.sheets)) {
+        const parsed: DiagramSheet[] = stored.sheets.map((sheet) => {
+          const nextNodes = sheet.nodes.map(readImportedNode).filter((node): node is SystemNode => !!node);
+          const ids = new Set(nextNodes.map((node) => node.id));
+          return { id: sheet.id, name: sheet.name, family: sheet.family, nodes: nextNodes, connections: readImportedConnections(sheet.connections, ids) };
         });
+        const current = parsed.find((sheet) => sheet.id === stored.sheetId) ?? parsed[0];
+        remember();
+        sheetsRef.current = parsed;
+        setSheets(parsed);
+        setSheetId(current.id);
+        sheetIdRef.current = current.id;
+        loadSheet(current);
+        setToast({ message: parsed.length === 1 ? "Drawing opened" : `Opened ${parsed.length} diagrams`, type: "success" });
+        scheduleCheck(sheetsToModel(parsed), false);
+        return;
       }
+      const nextNodes = stored.sheets[0].nodes.map(readImportedNode).filter((node): node is SystemNode => !!node);
       const ids = new Set(nextNodes.map((node) => node.id));
-      const nextConnections: Connection[] = [];
-      if (Array.isArray(data.connections)) {
-        for (const item of data.connections) {
-          if (!item || typeof item !== "object") continue;
-          const raw = item as Partial<Connection> & { source?: string; target?: string };
-          const from = typeof raw.from === "string" ? raw.from : raw.source;
-          const to = typeof raw.to === "string" ? raw.to : raw.target;
-          if (!from || !to || !ids.has(from) || !ids.has(to)) continue;
-          nextConnections.push({
-            id: typeof raw.id === "string" ? raw.id : `c-${from}-${to}`,
-            from,
-            to,
-            status: raw.status === "error" ? "error" : "active",
-            protocol: typeof raw.protocol === "string" ? raw.protocol : undefined,
-            style: raw.style === "elbow" || raw.style === "straight" || raw.style === "curve" ? raw.style : undefined,
-          });
-        }
-      }
+      const nextConnections = readImportedConnections(stored.sheets[0].connections, ids);
       remember();
       nodesRef.current = nextNodes;
       connectionsRef.current = nextConnections;
+      const saved = currentSheets();
+      sheetsRef.current = saved;
+      setSheets(saved);
       setActiveChallenge("freeform");
       setNodes(nextNodes);
       setConnections(nextConnections);
       setSelectedNodeId(null);
       setSelectedConnId(null);
       setToast({ message: "Drawing opened", type: "success" });
+      scheduleCheck(sheetsToModel(saved), false);
     }).catch(() => setToast({ message: "That file is not a Foundry drawing. Open a JSON file saved from this lab.", type: "error" }));
+  }
+
+  function shareProjectPayload() {
+    const saved = currentSheets();
+    return {
+      specVersion: "2.0-keel-foundry" as const,
+      sheetId: sheetIdRef.current,
+      sheets: saved.map((sheet) => ({
+        id: sheet.id,
+        name: sheet.name,
+        family: sheet.family,
+        nodes: sheet.nodes.map(nodeExportRecord),
+        connections: sheet.connections.map(connectionExportRecord),
+      })),
+    };
+  }
+
+  function sendShareProject() {
+    const room = shareRoomRef.current;
+    const channel = shareChannel.current;
+    const self = shareClient.current;
+    if (!shareOnRef.current || !room || !channel || !self) return;
+    const project = shareProjectPayload();
+    try {
+      if (JSON.stringify(project).length > SHARE_LIMIT) return;
+      channel.postMessage({ room, from: self, kind: "project", project });
+    } catch {
+      // The other tab closed the channel.
+    }
+  }
+
+  function applySharedProject(project: unknown) {
+    const stored = readStoredProject(project);
+    if (!stored) return;
+    const parsed: DiagramSheet[] = stored.sheets.map((sheet) => {
+      const nextNodes = sheet.nodes.map(readImportedNode).filter((node): node is SystemNode => !!node);
+      const ids = new Set(nextNodes.map((node) => node.id));
+      return { id: sheet.id, name: sheet.name, family: sheet.family, nodes: nextNodes, connections: readImportedConnections(sheet.connections, ids) };
+    });
+    if (parsed.length === 0) return;
+    const current = parsed.find((sheet) => sheet.id === stored.sheetId) ?? parsed[0];
+    shareEcho.current = true;
+    remember();
+    sheetsRef.current = parsed;
+    setSheets(parsed);
+    setSheetId(current.id);
+    sheetIdRef.current = current.id;
+    loadSheet(current);
+  }
+
+  function changeShareRoom(value: string) {
+    setShareRoomName(value);
+  }
+
+  function toggleShare() {
+    if (shareOn) {
+      setShareOn(false);
+      setModelNote("Share is off.");
+      return;
+    }
+    const room = shareRoom(shareRoomName);
+    if (!room) {
+      setShowModeling(true);
+      setModelNote("Use a room name such as harbor, then share again.");
+      return;
+    }
+    setShareOn(true);
+    setModelNote(`Sharing ${room} in this browser.`);
   }
 
   useEffect(() => {
     commands.current = { undo, redo, copy: duplicateSelected, remove: deleteSelection };
+    paletteRef.current = () => setShowCommands((open) => !open);
+    shareApply.current = applySharedProject;
+    shareSend.current = sendShareProject;
   });
 
   useEffect(() => {
@@ -1571,6 +1907,16 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       if ((event.metaKey || event.ctrlKey) && key === "y") {
         event.preventDefault();
         commands.current.redo();
+        return;
+      }
+      if (!typing && (event.metaKey || event.ctrlKey) && !event.altKey && key === "k" && !event.shiftKey) {
+        event.preventDefault();
+        paletteRef.current();
+        return;
+      }
+      if (!typing && (event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && key === "f") {
+        event.preventDefault();
+        paletteRef.current();
         return;
       }
       if (typing) return;
@@ -1591,49 +1937,81 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  useEffect(() => {
+    shareOnRef.current = shareOn;
+    const room = shareRoom(shareRoomName);
+    shareRoomRef.current = room;
+    if (!shareOn || !room || typeof BroadcastChannel === "undefined") return;
+    const self = shareClient.current || crypto.randomUUID();
+    shareClient.current = self;
+    const channel = new BroadcastChannel(SHARE_CHANNEL);
+    shareChannel.current = channel;
+    // An empty tab must not publish on join. The other tab answers hello with its drawing.
+    shareSkip.current = true;
+    const onMessage = (event: MessageEvent) => {
+      if (!shareOnRef.current || shareRoomRef.current !== room) return;
+      const message = readShareMessage(event.data, room, self);
+      if (!message) return;
+      if (message.kind === "hello") {
+        shareSend.current();
+        return;
+      }
+      shareApply.current(message.project);
+    };
+    channel.addEventListener("message", onMessage);
+    try {
+      channel.postMessage({ room, from: self, kind: "hello" });
+    } catch {
+      // The tab closed the channel.
+    }
+    return () => {
+      channel.removeEventListener("message", onMessage);
+      channel.close();
+      if (shareChannel.current === channel) shareChannel.current = null;
+    };
+  }, [shareOn, shareRoomName]);
+
+  useEffect(() => {
+    if (!shareOn) return;
+    if (shareSkip.current) {
+      shareSkip.current = false;
+      return;
+    }
+    if (shareEcho.current) {
+      shareEcho.current = false;
+      return;
+    }
+    shareSend.current();
+  }, [nodes, connections, sheets, umlFamily, sheetId, shareOn, shareRoomName]);
+
   // Export Topology
   const exportTopology = () => {
+    const saved = currentSheets();
+    scheduleCheck(sheetsToModel(saved), false);
+    const active = saved.find((sheet) => sheet.id === sheetIdRef.current) ?? saved[0];
+    const exportedAt = new Date().toISOString();
     const topology = {
       specVersion: "2.0-keel-foundry",
-      exportedAt: new Date().toISOString(),
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.type,
-        label: n.label,
-        x: n.x,
-        y: n.y,
-        w: n.w,
-        h: n.h,
-        z: n.z,
-        health: n.health,
-        role: n.role,
-        industryTool: n.industryTool,
-        industryEquivalent: n.industryTool,
-        latencyMs: n.latency,
-        latency: n.latency,
-        capacity: n.capacity,
-        capacityRps: n.capacity,
-        rps: n.rps,
+      exportedAt,
+      sheetId: active?.id,
+      sheets: saved.map((sheet) => ({
+        id: sheet.id,
+        name: sheet.name,
+        family: sheet.family,
+        nodes: sheet.nodes.map(nodeExportRecord),
+        connections: sheet.connections.map(connectionExportRecord),
       })),
-      connections: connections.map((c) => ({
-        id: c.id,
-        from: c.from,
-        to: c.to,
-        source: c.from,
-        target: c.to,
-        status: c.status,
-        style: c.style,
-        protocol: c.protocol || "HTTPS",
-      })),
+      nodes: (active?.nodes ?? []).map(nodeExportRecord),
+      connections: (active?.connections ?? []).map(connectionExportRecord),
     };
     const blob = new Blob([JSON.stringify(topology, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `keel-architecture-spec-${Date.now()}.json`;
+    a.download = `keel-architecture-spec-${exportedAt.slice(0, 19)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setToast({ message: "Architecture topology exported as JSON.", type: "success" });
+    setToast({ message: saved.length === 1 ? "Architecture topology exported as JSON." : `Exported ${saved.length} diagrams.`, type: "success" });
   };
 
   const runService = async (action: "run" | "download") => {
@@ -1676,23 +2054,214 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
   };
 
   // Compute live system stats
-  const measured = nodes.filter((n) => !isShape(n.type));
+  const measured = nodes.filter((n) => !drawnShape(n.type));
   const healthyCount = measured.filter((n) => n.health === "healthy").length;
   const availability = measured.length ? Math.round((healthyCount / measured.length) * 100) : 100;
   const avgLatency = measured.length ? Math.round(measured.reduce((acc, n) => acc + (n.health === "down" ? 500 : n.latency), 0) / measured.length) : 0;
   const extent = boardExtent(nodes);
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedConn = connections.find((c) => c.id === selectedConnId);
+  function shapeGlyph(type: string): UmlGlyph | "" {
+    return umlGlyph(type) || extensionTools.find((tool) => tool.id === type)?.glyph || (isExtensionType(type) ? "class" : "");
+  }
+  function faceMeta(type: string): NodeMeta {
+    const known = nodeTypeMeta[type as NodeType];
+    if (known) return known;
+    const tool = extensionTools.find((item) => item.id === type);
+    return { name: tool?.name ?? "Extension", color: "#d4d4d8", Icon: GLYPH_ICON[tool?.glyph ?? "class"], tool: "", desc: tool?.name ?? "Extension" };
+  }
+  function readDiagram(): DiagramSnapshot {
+    return {
+      language: languageOf(umlFamily),
+      family: umlFamily,
+      selectedNodeId,
+      nodes: nodesRef.current.map((node) => {
+        const size = nodeSize(node);
+        return { id: node.id, type: node.type, label: node.label, x: node.x, y: node.y, w: size.w, h: size.h, stereotype: node.stereotype ?? "" };
+      }),
+      connections: connectionsRef.current.map((link) => ({ id: link.id, from: link.from, to: link.to, kind: link.kind ?? "", label: link.protocol ?? "" })),
+    };
+  }
+  const selectedGlyph = selectedNode ? shapeGlyph(selectedNode.type) : "";
   const currentCh = CHALLENGES.find((c) => c.id === activeChallenge) || CHALLENGES[0];
   const connectSourceNode = nodes.find((n) => n.id === connectFromId);
 
+  function scheduleCheck(source: ModelSheet[], reveal: boolean) {
+    const token = checkToken.current + 1;
+    checkToken.current = token;
+    setModelBusy(true);
+    setModelIssues([]);
+    setModelNote("Checking this sheet…");
+    if (reveal) setShowModeling(true);
+    queueMicrotask(() => {
+      if (checkToken.current !== token) return;
+      const issues = checkModel(source);
+      setModelIssues(issues);
+      setModelBusy(false);
+      setModelNote(issues.length === 0 ? "Checked. No notes." : issues.length === 1 ? "1 note." : `${issues.length} notes.`);
+      if (issues.length > 0) setShowModeling(true);
+    });
+  }
+
+  function choosePage(value: "a4" | "letter") {
+    setPrintPage(value);
+    chooseFoundryPage(value);
+  }
+
+  function printSheet() {
+    chooseFoundryPage(printPage);
+    window.print();
+  }
+
+  function activeModel() {
+    const model = sheetsToModel(currentSheets());
+    return model.find((sheet) => sheet.id === sheetIdRef.current) ?? model[0];
+  }
+
+  function writeSketch(language: SketchLanguage) {
+    setCodeLanguage(language);
+    const text = sketchModel(sheetsToModel(currentSheets()), language);
+    setSketchText(text);
+    setDeskLines([]);
+    setLooseShapes([]);
+    setShowModeling(true);
+    downloadText(`keel-foundry.${sketchFileExtension(language)}`, text, "text/plain;charset=utf-8");
+  }
+
+  function showRelationships() {
+    const sheet = activeModel();
+    setDeskLines(sheet && selectedNodeId ? relationshipLines(sheet, selectedNodeId) : ["Select a shape, then look at its lines again."]);
+    setLooseShapes([]);
+    setSketchText("");
+    setShowModeling(true);
+  }
+
+  function showUnconnected() {
+    const sheet = activeModel();
+    const loose = sheet ? unconnectedNodes(sheet) : [];
+    setLooseShapes(loose);
+    setDeskLines(loose.length ? [] : ["Every shape on this sheet has a line."]);
+    setSketchText("");
+    setShowModeling(true);
+  }
+
+  function removeLoose(id: string) {
+    const node = nodesRef.current.find((item) => item.id === id);
+    if (!node) return;
+    remember();
+    const nextNodes = nodesRef.current.filter((item) => item.id !== id);
+    const nextConnections = connectionsRef.current.filter((link) => link.from !== id && link.to !== id);
+    nodesRef.current = nextNodes;
+    connectionsRef.current = nextConnections;
+    setNodes(nextNodes);
+    setConnections(nextConnections);
+    if (selectedNodeId === id) setSelectedNodeId(null);
+    setLooseShapes((current) => current.filter((item) => item.id !== id));
+    setToast({ message: `${node.label.trim() || node.type} was removed.`, type: "info" });
+  }
+
+  function copyShapeName() {
+    const node = nodesRef.current.find((item) => item.id === selectedNodeId);
+    if (!node) {
+      setToast({ message: "Select a shape, then copy the name again.", type: "error" });
+      return;
+    }
+    const name = node.label.trim() || node.type;
+    const clip = navigator.clipboard;
+    if (clip?.writeText) void clip.writeText(name).catch(() => {});
+    setToast({ message: name, type: "success" });
+  }
+
+  function publishNotes() {
+    const model = sheetsToModel(currentSheets());
+    const active = model.find((sheet) => sheet.id === sheetIdRef.current) ?? model[0];
+    downloadText("keel-foundry-notes.html", htmlNotes(model, active?.name || "Foundry notes"), "text/html;charset=utf-8");
+    setShowModeling(true);
+  }
+
+  function publishSvg() {
+    const model = sheetsToModel(currentSheets());
+    const active = model.find((sheet) => sheet.id === sheetIdRef.current) ?? model[0];
+    if (!active) return;
+    downloadText("keel-foundry-diagram.svg", diagramSvg(active), "image/svg+xml");
+    setShowModeling(true);
+  }
+
+  function checkSheet() {
+    scheduleCheck(sheetsToModel(currentSheets()), true);
+  }
+
+  function placeScreenFromDesk() {
+    const drawn = wireframeScreen(readDiagram());
+    if (drawn.patch.addNodes.length === 0) {
+      setToast({ message: drawn.patch.summary || "The desk could not place that screen. Clear a little space and try again.", type: "error" });
+      return;
+    }
+    rememberFamily("wireframe");
+    applyExtensionPatch(drawn.patch);
+    setSketchWire(true);
+  }
+
+  function focusShape(id: string) {
+    setSelectedNodeId(id);
+    setSelectedConnId(null);
+    const node = nodesRef.current.find((item) => item.id === id);
+    const view = viewportRef.current;
+    if (!node || !view) return;
+    const scale = zoomRef.current || 1;
+    view.scrollTo({ left: Math.max(0, node.x * scale - 48), top: Math.max(0, node.y * scale - 48) });
+  }
+
+  const deskCommands: DeskCommand[] = [
+    { id: "undo", label: "Undo", run: undo },
+    { id: "redo", label: "Redo", run: redo },
+    { id: "blank", label: "Blank canvas", run: blankCanvas },
+    { id: "fit", label: "Fit", run: fitView },
+    { id: "check", label: "Check sheet", run: checkSheet },
+    { id: "screen", label: "Place a screen", run: placeScreenFromDesk },
+    { id: "mermaid", label: "Open Mermaid", run: () => setShowMermaid(true) },
+    { id: "export", label: "Export JSON", run: exportTopology },
+    { id: "java", label: "Sketch Java", run: () => writeSketch("java") },
+    { id: "cs", label: "Sketch C#", run: () => writeSketch("cs") },
+    { id: "cpp", label: "Sketch C++", run: () => writeSketch("cpp") },
+    { id: "py", label: "Sketch Python", run: () => writeSketch("py") },
+    { id: "html", label: "HTML notes", run: publishNotes },
+    { id: "print", label: "Print", run: printSheet },
+    { id: "light", label: "Light theme", run: () => chooseFoundryTheme("light") },
+    { id: "dark", label: "Dark theme", run: () => chooseFoundryTheme("dark") },
+    { id: "lines", label: "Relationships", run: showRelationships },
+    { id: "loose", label: "Unconnected", run: showUnconnected },
+    { id: "copy-name", label: "Copy name", run: copyShapeName },
+    { id: "php", label: "Sketch PHP", run: () => writeSketch("php") },
+    { id: "js", label: "Sketch JavaScript", run: () => writeSketch("js") },
+    { id: "ts", label: "Sketch TypeScript", run: () => writeSketch("ts") },
+    { id: "ruby", label: "Sketch Ruby", run: () => writeSketch("ruby") },
+    { id: "sql", label: "Sketch SQL", run: () => writeSketch("sql") },
+    { id: "graphql", label: "Sketch GraphQL", run: () => writeSketch("graphql") },
+    ...extensionCommands.map((command) => ({
+      id: `${command.extensionId}-${command.index}`,
+      label: command.name,
+      run: () => extensionRun.current(command),
+    })),
+  ];
+
   const lab = (
-    <div data-foundry-root="" className={fullPage ? "fixed inset-0 z-40 flex flex-col overflow-hidden bg-paper" : "mx-auto max-w-7xl px-4 py-8"}>
+    <div data-foundry-root="" data-foundry-page={printPage} className={fullPage ? "fixed inset-0 z-40 flex flex-col overflow-hidden bg-paper" : "mx-auto max-w-7xl px-4 py-8"}>
+      <FoundryCommands
+        key={showCommands ? "commands-open" : "commands-shut"}
+        open={showCommands}
+        commands={deskCommands}
+        shapes={nodes.map((node) => ({ id: node.id, label: node.label || node.type }))}
+        diagrams={sheets.map((sheet) => ({ id: sheet.id, label: sheet.name }))}
+        onClose={() => setShowCommands(false)}
+        onShape={focusShape}
+        onDiagram={openSheet}
+      />
       {/* Toast Notification */}
       {toast && (
         <div
           role="status"
-          className="fixed bottom-24 right-6 z-[60] flex items-center gap-3 rounded-lg border border-line bg-raised px-4 py-3 shadow-xl transition-all"
+          className="foundry-print-hide fixed bottom-24 right-6 z-[60] flex items-center gap-3 rounded-lg border border-line bg-raised px-4 py-3 shadow-xl transition-all"
         >
           <span className="text-base font-bold">
             {toast.type === "success" ? <IconCheck size={16} className="text-good" /> : toast.type === "error" ? <IconChaos size={16} className="text-danger" /> : <IconArchitect size={16} className="text-copper" />}
@@ -1709,7 +2278,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       )}
 
       {/* Header & Academic Lineage */}
-      <section className={fullPage ? "shrink-0 border-b border-line bg-paper px-3 py-2" : "rounded-xl border border-line bg-raised p-5 shadow-xs"}>
+      <section className={fullPage ? "foundry-print-hide shrink-0 border-b border-line bg-paper px-3 py-2" : "foundry-print-hide rounded-xl border border-line bg-raised p-5 shadow-xs"}>
         {!fullPage && (<>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -1815,7 +2384,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
       {/* Main Studio Area */}
       <div className={fullPage ? "relative flex min-h-0 flex-1 flex-col" : "relative mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4"}>
         {/* Left Sidebar: Component Palette & Control Panel */}
-        <div className={fullPage ? (showRail ? "absolute start-3 top-16 z-30 max-h-[calc(100%-5rem)] w-72 space-y-4 overflow-auto" : "hidden") : "space-y-4 lg:col-span-1"}>
+        <div className={fullPage ? (showRail ? "foundry-print-hide absolute start-3 top-16 z-30 max-h-[calc(100%-5rem)] w-72 space-y-4 overflow-auto" : "hidden") : "foundry-print-hide space-y-4 lg:col-span-1"}>
           {/* Architecture Toolbox with Premium Vector Icons */}
           <div className="rounded-xl border border-line bg-raised p-4 shadow-xs">
             <h2 className="text-xs font-bold uppercase tracking-wider text-ink">Architecture Toolbox</h2>
@@ -1970,8 +2539,27 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
         {/* Center / Right: Interactive Canvas & Toolbar */}
         <div className={fullPage ? "flex min-h-0 flex-1 flex-col gap-2 p-2" : "flex flex-col gap-4 lg:col-span-3"}>
+          <div className="foundry-print-hide flex shrink-0 gap-1 overflow-x-auto rounded-xl border border-line bg-raised px-2 py-1.5" aria-label="Modeling language">
+            {MODEL_LANGUAGES.map((language) => {
+              const current = languageOf(umlFamily) === language.id;
+              return (
+                <button
+                  key={language.id}
+                  type="button"
+                  aria-pressed={current}
+                  onClick={() => chooseLanguage(language.id)}
+                  className={`flex min-h-11 min-w-16 shrink-0 flex-col items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-semibold leading-none ${current ? "text-copper" : "text-soft hover:text-ink"}`}
+                >
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-paper ${current ? "border-copper text-copper" : "border-transparent text-ink"}`}>
+                    <LanguageIcon id={language.id} />
+                  </span>
+                  <span className="whitespace-nowrap">{language.name}</span>
+                </button>
+              );
+            })}
+          </div>
           {/* Canvas Enterprise Toolbar with Precision Vector Icons */}
-          <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-raised px-3 py-2 shadow-xs ${fullPage ? "max-h-40 overflow-y-auto md:max-h-none md:overflow-visible" : ""}`}>
+          <div className={`foundry-print-hide flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-raised px-3 py-2 shadow-xs ${fullPage ? "max-h-40 overflow-y-auto md:max-h-64" : ""}`}>
             {/* Interactive Modes */}
             <div className="flex flex-wrap items-center gap-1.5">
               <button
@@ -2045,6 +2633,84 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 </button>
               ))}
 
+              {languageOf(umlFamily) === "uml" ? (
+                <>
+                  <label className="sr-only" htmlFor="uml-diagram">UML diagram</label>
+                  <select
+                    id="uml-diagram"
+                    aria-label="UML diagram"
+                    value={umlFamily}
+                    onChange={(e) => chooseDiagram(e.target.value as UmlFamily)}
+                    className="rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink"
+                  >
+                    {diagramsFor("uml").map((family) => (
+                      <option key={family.id} value={family.id}>{family.name}</option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
+              <div className="flex max-w-full flex-wrap items-end gap-2" aria-label="Toolbox">
+                {toolboxFor(umlFamily).map((group) => (
+                  <div key={group.name} className="flex flex-wrap items-center gap-1">
+                    <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-soft">{group.name}</span>
+                    {group.entries.map((entry) => {
+                      const armed = selectedConn ? relationKindOf(selectedConn.kind) : relationKind;
+                      const pressed = entry.kind === "relation" ? armed === entry.id : entry.kind === "wire" ? armed === "" : false;
+                      return (
+                        <button
+                          key={entryKey(entry)}
+                          type="button"
+                          aria-pressed={entry.kind === "relation" || entry.kind === "wire" ? pressed : undefined}
+                          onClick={() => {
+                            if (entry.kind === "node" || entry.kind === "service") addNode(entry.type);
+                            else if (entry.kind === "relation") chooseRelation(entry.id);
+                            else chooseRelation("");
+                          }}
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${pressed ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink hover:border-copper"}`}
+                        >
+                          {entry.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+                {extensionTools.some((tool) => toolVisible(tool, languageOf(umlFamily), umlFamily)) ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-soft">Extension</span>
+                    {extensionTools.filter((tool) => toolVisible(tool, languageOf(umlFamily), umlFamily)).map((tool) => (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={() => addExtensionNode(tool)}
+                        className="min-h-11 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper"
+                      >
+                        {tool.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <label className="sr-only" htmlFor="uml-relation">UML relation</label>
+              <select
+                id="uml-relation"
+                aria-label="UML relation"
+                value={selectedConn ? relationKindOf(selectedConn.kind) : relationKind}
+                onChange={(e) => chooseRelation(e.target.value)}
+                className="rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink"
+              >
+                <option value="">Plain wire</option>
+                <optgroup label={UML_FAMILIES.find((family) => family.id === umlFamily)?.name ?? "UML"}>
+                  {relationsFor(umlFamily).map((relation) => (
+                    <option key={relation.id} value={relation.id}>{relation.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Every relation">
+                  {UML_RELATIONS.filter((relation) => !relation.families.includes(umlFamily)).map((relation) => (
+                    <option key={relation.id} value={relation.id}>{relation.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+
               <button type="button" onClick={undo} disabled={!canUndo} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper disabled:opacity-40">Undo</button>
               <button type="button" onClick={redo} disabled={!canRedo} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper disabled:opacity-40">Redo</button>
               <button type="button" onClick={duplicateSelected} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Copy</button>
@@ -2071,6 +2737,53 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 <IconAutoLayout size={15} />
                 <span>Auto-Layout</span>
               </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2" aria-label="Working diagrams">
+              {sheets.map((sheet) => {
+                const drawn = sheet.id === sheetId ? nodes : sheet.nodes;
+                const ext = boardExtent(drawn);
+                return (
+                  <button
+                    key={sheet.id}
+                    type="button"
+                    aria-current={sheet.id === sheetId ? "true" : undefined}
+                    onClick={() => openSheet(sheet.id)}
+                    className={`flex w-28 flex-col gap-1 rounded-lg border p-1 text-left ${sheet.id === sheetId ? "border-copper" : "border-line"}`}
+                  >
+                    <span className="relative h-10 w-full overflow-hidden rounded bg-zinc-900" aria-hidden="true">
+                      {drawn.slice(0, 8).map((node) => (
+                        <span
+                          key={node.id}
+                          className="absolute bg-zinc-300"
+                          style={{ left: `${(node.x / ext.w) * 80}%`, top: `${(node.y / ext.h) * 70}%`, width: 8, height: 5 }}
+                        />
+                      ))}
+                    </span>
+                    <span className="truncate text-[10px] font-semibold text-ink">{sheet.name}</span>
+                    <span className="truncate text-[10px] text-soft">{languageLabel(sheet.id === sheetId ? umlFamily : sheet.family)}</span>
+                  </button>
+                );
+              })}
+              <button type="button" onClick={newDiagram} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">New diagram</button>
+              <label className="sr-only" htmlFor="diagram-name">Diagram name</label>
+              <input
+                id="diagram-name"
+                value={sheets.find((sheet) => sheet.id === sheetId)?.name ?? ""}
+                onChange={(event) => renameSheet(event.target.value)}
+                className="w-36 rounded-lg border border-line bg-paper px-2 py-1.5 text-xs font-semibold text-ink"
+              />
+              <button type="button" aria-pressed={showExplorer} onClick={() => setShowExplorer((open) => !open)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showExplorer ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Model explorer</button>
+              <button type="button" aria-pressed={showExtensions} onClick={() => setShowExtensions((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showExtensions ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Extensions</button>
+              <button type="button" aria-pressed={showAi} onClick={() => setShowAi((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showAi ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>AI desk</button>
+              <button type="button" aria-pressed={showMermaid} onClick={() => setShowMermaid((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showMermaid ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Mermaid</button>
+              {languageOf(umlFamily) === "wireframe" ? (
+                <button type="button" aria-pressed={sketchWire} onClick={() => setSketchWire((on) => !on)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${sketchWire ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Sketch</button>
+              ) : null}
+              <button type="button" aria-pressed={showCommands} onClick={() => setShowCommands((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showCommands ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Commands</button>
+              <button type="button" aria-pressed={showModeling} onClick={() => setShowModeling((open) => !open)} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${showModeling ? "border-copper bg-copper text-raised" : "border-line bg-paper text-ink"}`}>Modeling</button>
+              <Link href="/foundry/guide" className="inline-flex min-h-11 items-center rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Guide</Link>
+              <Link href="/foundry/help" className="inline-flex min-h-11 items-center rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-copper">Help</Link>
             </div>
 
             {/* Template Selector Dropdown */}
@@ -2141,7 +2854,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           {/* Mode Banner / Live Drawing Guide */}
           {(connectFromId || toolMode === "connect" || toolMode === "disconnect") && (
-            <div className={`flex items-center justify-between rounded-lg border px-4 py-2 text-xs font-semibold shadow-xs ${
+            <div className={`foundry-print-hide flex items-center justify-between rounded-lg border px-4 py-2 text-xs font-semibold shadow-xs ${
               toolMode === "disconnect"
                 ? "border-danger/40 bg-danger/10 text-danger"
                 : "border-copper/40 bg-copper/10 text-copper"
@@ -2173,8 +2886,44 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
             </div>
           )}
 
+          <FoundryExtensions
+            open={showExtensions}
+            readDiagram={readDiagram}
+            applyPatch={applyExtensionPatch}
+            onTools={setExtensionTools}
+            onCommands={setExtensionCommands}
+            runExtensionRef={extensionRun}
+          />
+          <FoundryAi open={showAi} readDiagram={readDiagram} applyPatch={applyExtensionPatch} />
+          <FoundryMermaid open={showMermaid} readDiagram={readDiagram} applyPatch={applyExtensionPatch} onFamily={rememberFamily} />
+          <FoundryModeling
+            open={showModeling}
+            busy={modelBusy}
+            note={modelNote}
+            issues={modelIssues}
+            language={codeLanguage}
+            onLanguage={setCodeLanguage}
+            page={printPage}
+            onPage={choosePage}
+            theme={canvasTheme}
+            onTheme={chooseFoundryTheme}
+            sketch={sketchText}
+            lines={deskLines}
+            loose={looseShapes}
+            onRemove={removeLoose}
+            room={shareRoomName}
+            sharing={shareOn}
+            onRoom={changeShareRoom}
+            onShare={toggleShare}
+            onCheck={checkSheet}
+            onSketch={() => writeSketch(codeLanguage)}
+            onHtml={publishNotes}
+            onSvg={publishSvg}
+            onPrint={printSheet}
+          />
+
           {/* Interactive canvas. The frame stays on screen. The board inside it scrolls and grows. */}
-          <div className={`relative w-full rounded-xl border border-zinc-700 bg-zinc-950 shadow-inner ${fullPage ? "min-h-0 flex-1" : "h-[calc(100dvh-9rem)] min-h-[36rem]"}`}>
+          <div data-foundry-theme={canvasTheme} className={`foundry-canvas relative w-full rounded-xl border border-zinc-700 bg-zinc-950 shadow-inner ${fullPage ? "min-h-32 flex-1" : "h-[calc(100dvh-9rem)] min-h-[36rem]"}`}>
             {/* Canvas Header Legend & Speed / Flow Controls */}
             <div className="absolute left-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/75 px-3 py-1.5 backdrop-blur-md">
               <span className={`h-2 w-2 rounded-full ${flowPaused || selectedParticle ? "bg-amber-400" : "bg-emerald-400 animate-pulse"}`} />
@@ -2236,16 +2985,38 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               <div style={{ width: extent.w * zoom, height: extent.h * zoom }}>
                 <div
                   ref={boardRef}
-                  className="relative"
+                  className="foundry-board relative"
                   style={{
                     width: extent.w,
                     height: extent.h,
                     transform: `scale(${zoom})`,
                     transformOrigin: "0 0",
-                    backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0)",
+                    backgroundImage: canvasTheme === "light"
+                      ? "radial-gradient(circle at 1px 1px, rgba(28,25,22,0.12) 1px, transparent 0)"
+                      : "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0)",
                     backgroundSize: "28px 28px",
                   }}
                 >
+
+            {showExplorer ? (
+              <aside aria-label="Model explorer" className="absolute end-2 top-2 z-30 max-h-64 w-52 overflow-auto rounded-lg border border-line bg-paper p-2 text-ink shadow-xs">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-soft">Model explorer</p>
+                {nodes.length === 0 ? <p className="mt-2 text-xs text-soft">This diagram is empty.</p> : null}
+                <ul className="mt-1">
+                  {nodes.map((node) => (
+                    <li key={node.id}>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedNodeId(node.id); setSelectedConnId(null); }}
+                        className={`block w-full truncate rounded px-1 py-1 text-left text-xs ${selectedNodeId === node.id ? "bg-copper text-raised" : "hover:bg-raised"}`}
+                      >
+                        {faceMeta(node.type).name}: {node.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            ) : null}
 
             {/* SVG Directional Connections Layer */}
             <svg className="absolute inset-0 h-full w-full pointer-events-auto">
@@ -2285,6 +3056,28 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                 >
                   <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#d08968" />
                 </marker>
+                <marker id="uml-open" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+                  <path d="M 1 1.5 L 11 6 L 1 10.5" fill="none" stroke="#e4e4e7" strokeWidth="1.4" />
+                </marker>
+                <marker id="uml-arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+                  <path d="M 0 1 L 12 6 L 0 11 Z" fill="#e4e4e7" />
+                </marker>
+                <marker id="uml-triangle" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto">
+                  <path d="M 1 1 L 13 6 L 1 11 Z" fill="#09090b" stroke="#e4e4e7" strokeWidth="1.2" />
+                </marker>
+                <marker id="uml-ball" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+                  <circle cx="6" cy="6" r="4" fill="#e4e4e7" />
+                </marker>
+                <marker id="uml-diamond" viewBox="0 0 16 12" refX="0" refY="6" markerWidth="16" markerHeight="12" orient="auto">
+                  <path d="M 0 6 L 8 1 L 16 6 L 8 11 Z" fill="#09090b" stroke="#e4e4e7" strokeWidth="1.2" />
+                </marker>
+                <marker id="uml-diamond-filled" viewBox="0 0 16 12" refX="0" refY="6" markerWidth="16" markerHeight="12" orient="auto">
+                  <path d="M 0 6 L 8 1 L 16 6 L 8 11 Z" fill="#e4e4e7" />
+                </marker>
+                <marker id="uml-plus" viewBox="0 0 14 14" refX="7" refY="7" markerWidth="14" markerHeight="14" orient="0">
+                  <circle cx="7" cy="7" r="5.5" fill="#09090b" stroke="#e4e4e7" strokeWidth="1.2" />
+                  <path d="M 7 3.5 V 10.5 M 3.5 7 H 10.5" stroke="#e4e4e7" strokeWidth="1.2" />
+                </marker>
 
                 <linearGradient id="activeWire" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
@@ -2304,13 +3097,24 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
                 const fromPort = anchors(fromNode).out;
                 const toPort = anchors(toNode).inn;
+                const self = fromNode.id === toNode.id;
                 const x1 = fromPort.x;
                 const y1 = fromPort.y;
                 const x2 = toPort.x;
                 const y2 = toPort.y;
                 const isError = conn.status === "error" || fromNode.health === "down" || toNode.health === "down";
                 const isSelected = selectedConnId === conn.id;
-                const pathD = wirePath(x1, y1, x2, y2, wireStyleOf(conn.style));
+                const style = wireStyleOf(conn.style);
+                const pathD = self ? loopPath(x1, y1) : wirePath(x1, y1, x2, y2, style);
+                const look = relationLook(conn.kind);
+                const markerEnd = !look ? (isError ? "url(#arrow-error)" : "url(#arrow-active)") : look.end === "none" ? undefined : `url(#uml-${look.end})`;
+                const markerStart = look && look.start !== "none" ? `url(#uml-${look.start})` : undefined;
+                const mid = self ? { x: x1 + 48, y: y1 + 8 } : pointOnWire(x1, y1, x2, y2, 0.5, style);
+                const nearStart = self ? { x: x1 + 18, y: y1 - 16 } : pointOnWire(x1, y1, x2, y2, 0.18, style);
+                const nearEnd = self ? { x: x1 + 18, y: y1 + 28 } : pointOnWire(x1, y1, x2, y2, 0.82, style);
+                const midLabel = (conn.protocol && conn.protocol !== "HTTPS / Dataflow" ? conn.protocol : look?.label) || "";
+                const fromLabel = [conn.fromMult, conn.fromRole].filter(Boolean).join(" ");
+                const toLabel = [conn.toMult, conn.toRole].filter(Boolean).join(" ");
 
                 return (
                   <g
@@ -2339,13 +3143,33 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     <path
                       d={pathD}
                       fill="none"
-                      stroke={isError ? "url(#errorWire)" : isSelected ? "#d08968" : "url(#activeWire)"}
+                      stroke={isError ? "url(#errorWire)" : isSelected ? "#d08968" : look ? "#e4e4e7" : "url(#activeWire)"}
                       strokeWidth={isSelected ? "3.5" : isError ? "2.5" : "2"}
-                      strokeDasharray={isError ? "4 4" : undefined}
-                      opacity={isSelected ? 1 : isError ? 0.9 : 0.65}
-                      markerEnd={isError ? "url(#arrow-error)" : "url(#arrow-active)"}
+                      strokeDasharray={look?.dashed ? "7 4" : isError ? "4 4" : undefined}
+                      opacity={isSelected ? 1 : isError ? 0.9 : 0.75}
+                      markerEnd={markerEnd}
+                      markerStart={markerStart}
                       className="group-hover:stroke-copper transition-colors"
                     />
+                    {fromLabel ? <text x={nearStart.x} y={nearStart.y - 6} fill="#e4e4e7" fontSize="11" textAnchor="middle">{fromLabel}</text> : null}
+                    {midLabel ? <text x={mid.x} y={mid.y - 8} fill="#e4e4e7" fontSize="11" textAnchor="middle">{midLabel}</text> : null}
+                    {toLabel ? <text x={nearEnd.x} y={nearEnd.y - 6} fill="#e4e4e7" fontSize="11" textAnchor="middle">{toLabel}</text> : null}
+                    {conn.kind === "crows" && !self ? (
+                      <>
+                        <CrowFoot
+                          x={x1}
+                          y={y1}
+                          degrees={(Math.atan2(y1 - pointOnWire(x1, y1, x2, y2, 0.08, style).y, x1 - pointOnWire(x1, y1, x2, y2, 0.08, style).x) * 180) / Math.PI}
+                          mark={crowMark(conn.fromMult)}
+                        />
+                        <CrowFoot
+                          x={x2}
+                          y={y2}
+                          degrees={(Math.atan2(y2 - pointOnWire(x1, y1, x2, y2, 0.92, style).y, x2 - pointOnWire(x1, y1, x2, y2, 0.92, style).x) * 180) / Math.PI}
+                          mark={crowMark(conn.toMult)}
+                        />
+                      </>
+                    ) : null}
                   </g>
                 );
               })}
@@ -2358,7 +3182,8 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   stroke="#d08968"
                   strokeWidth="2.5"
                   strokeDasharray="4 4"
-                  markerEnd="url(#arrow-temp)"
+                  markerEnd={relationLook(relationKind)?.end && relationLook(relationKind)?.end !== "none" ? `url(#uml-${relationLook(relationKind)?.end})` : "url(#arrow-temp)"}
+                  markerStart={relationLook(relationKind)?.start && relationLook(relationKind)?.start !== "none" ? `url(#uml-${relationLook(relationKind)?.start})` : undefined}
                   className="pointer-events-none"
                 />
               )}
@@ -2468,27 +3293,35 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
             {/* Interactive Drag & Drop Nodes with Vector Icons */}
             {[...nodes].sort((a, b) => (a.z ?? 0) - (b.z ?? 0)).map((node) => {
-              const meta = nodeTypeMeta[node.type];
+              const meta = faceMeta(node.type);
               const NodeIcon = meta.Icon;
               const isSelected = selectedNodeId === node.id;
               const isDown = node.health === "down";
               const isDegraded = node.health === "degraded";
               const isConnectSource = connectFromId === node.id;
-              const drawing = isShape(node.type);
+              const drawing = drawnShape(node.type);
+              const glyph = shapeGlyph(node.type);
               const size = nodeSize(node);
-              const shapeClass = node.type === "ellipse" || node.type === "cylinder"
+              const sketch = sketchWire && node.type.startsWith("wf-");
+              const bare = glyph === "actor" || glyph === "start" || glyph === "stop" || glyph === "end" || glyph === "hist" || glyph === "ball" || glyph === "socket" || glyph === "port" || glyph === "fork" || glyph === "decide" || glyph === "choice";
+              const ownChrome = glyph === "package" || glyph === "model" || glyph === "frame" || glyph === "bound" || glyph === "lane" || glyph === "life" || glyph === "frag" || glyph === "art" || glyph === "node" || glyph === "device" || glyph === "exec" || glyph === "comp";
+              const openFace = node.type === "text" || node.type === "diamond" || bare || ownChrome;
+              const shapeClass = glyph === "case" || glyph === "attr" || node.type === "ellipse" || node.type === "cylinder"
                 ? "rounded-full"
-                : node.type === "cloud"
-                  ? "rounded-[2rem]"
-                  : node.type === "note"
-                    ? "rounded-sm bg-amber-100 text-zinc-900"
-                    : node.type === "text" || node.type === "diamond"
-                      ? "border-transparent bg-transparent shadow-none"
-                      : "rounded-xl";
+                : glyph === "action" || glyph === "state"
+                  ? "rounded-2xl"
+                  : node.type === "cloud"
+                    ? "rounded-[2rem]"
+                    : node.type === "note"
+                      ? "rounded-sm bg-amber-100 text-zinc-900"
+                      : openFace
+                        ? "border-transparent bg-transparent shadow-none"
+                        : "rounded-xl";
 
               return (
                 <div
                   key={node.id}
+                  data-uml={glyph || undefined}
                   onPointerDown={(e) => handlePointerDown(node.id, e)}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
@@ -2499,9 +3332,13 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     width: size.w,
                     height: node.h || drawing ? size.h : undefined,
                     zIndex: 10 + (node.z ?? 0),
+                    fontFamily: node.font === "Georgia" ? "Georgia, serif" : node.font === "monospace" ? "ui-monospace, monospace" : node.font === "Arial" ? "Arial, sans-serif" : undefined,
+                    textAlign: node.align,
+                    borderColor: sketch ? "transparent" : node.ink === "copper" ? "#d08968" : node.ink === "amber" ? "#d97706" : undefined,
+                    borderStyle: node.lineStyle === "dashed" ? "dashed" : undefined,
                   }}
-                  className={`absolute flex cursor-grab flex-col border p-2.5 active:cursor-grabbing ${
-                    node.type === "text" || node.type === "diamond"
+                  className={`absolute flex cursor-grab flex-col border p-2.5 active:cursor-grabbing ${sketch ? "foundry-sketch " : ""}${node.active ? "outline outline-1 outline-offset-2 outline-zinc-200 " : ""}${
+                    openFace
                       ? shapeClass
                       : `${shapeClass} shadow-xl ${
                         node.type === "note"
@@ -2520,7 +3357,12 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                       }`
                   }`}
                 >
-                  {node.type === "diamond" && (
+                  {sketch ? (
+                    <svg className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible" aria-hidden="true">
+                      <path d={sketchPath(size.w, size.h, node.id)} fill="none" stroke={canvasTheme === "light" ? "#1c1916" : "#f3e6d4"} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+                    </svg>
+                  ) : null}
+                  {(node.type === "diamond" || glyph === "decide" || glyph === "choice" || glyph === "rel") && (
                     <div
                       className={`pointer-events-none absolute inset-0 ${isSelected ? "bg-zinc-800" : "bg-zinc-900"}`}
                       style={{ clipPath: "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)" }}
@@ -2537,7 +3379,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                     className="absolute -right-2 top-1/2 z-20 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-zinc-900 bg-zinc-400 hover:bg-copper hover:scale-125 transition-transform cursor-pointer"
                   />
 
-                  {node.type !== "text" && (
+                  {!glyph && node.type !== "text" && (
                     <div className="relative z-10 flex items-center justify-between">
                       <span className={node.type === "note" ? "text-zinc-800" : "text-zinc-300"}>
                         <NodeIcon size={18} />
@@ -2569,11 +3411,12 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                       }}
                       className="relative z-10 mt-1 w-full bg-transparent text-xs font-bold text-inherit outline-none"
                     />
-                  ) : (
+                  ) : glyph ? null : (
                     <div className={`relative z-10 ${node.type === "note" ? "[&_p]:text-zinc-900" : ""}`}>
                       <NodeWords label={node.label} role={node.role} tool={drawing ? "" : node.industryTool} type={node.type} />
                     </div>
                   )}
+                  {glyph ? <UmlFace node={node} glyph={glyph} hideName={editingId === node.id} /> : null}
 
                   {!drawing && (
                     <div className="relative z-10 mt-2 flex items-center justify-between gap-2 border-t border-zinc-700/60 pt-1.5 text-[9px] text-zinc-300">
@@ -2861,34 +3704,18 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
 
           {/* Connection Inspector Drawer */}
           {selectedConn && (
-            <div className="flex items-center justify-between rounded-xl border border-line bg-paper p-4 shadow-xs">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-raised text-ink">
-                  <IconConnect size={18} />
-                </span>
-                <div>
+            <div className={`foundry-print-hide rounded-xl border border-line bg-paper p-4 shadow-xs ${fullPage ? "max-h-44 shrink-0 overflow-auto" : ""}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-raised text-ink">
+                    <IconConnect size={18} />
+                  </span>
                   <h4 className="flex items-center gap-2 font-mono text-xs font-bold text-ink">
                     <span>Connection: {nodes.find((n) => n.id === selectedConn.from)?.label}</span>
                     <IconArrowRight size={13} className="text-copper" />
                     <span>{nodes.find((n) => n.id === selectedConn.to)?.label}</span>
                   </h4>
-                  <label htmlFor="conn-protocol" className="mt-1 block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">Protocol</label>
-                  <input
-                    id="conn-protocol"
-                    value={selectedConn.protocol || ""}
-                    onFocus={rememberOnce}
-                    onBlur={() => { editRemembered.current = false; }}
-                    onChange={(e) => {
-                      const next = connectionsRef.current.map((conn) => conn.id === selectedConn.id ? { ...conn, protocol: e.target.value } : conn);
-                      connectionsRef.current = next;
-                      setConnections(next);
-                    }}
-                    className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink"
-                  />
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
                     remember();
@@ -2904,26 +3731,55 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   <span>Disconnect Wire</span>
                 </button>
               </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div>
+                  <label htmlFor="conn-protocol" className="block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">{selectedConn.kind ? "Name" : "Protocol"}</label>
+                  <input
+                    id="conn-protocol"
+                    value={selectedConn.protocol || ""}
+                    onFocus={rememberOnce}
+                    onBlur={() => { editRemembered.current = false; }}
+                    onChange={(e) => updateSelectedConn({ protocol: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="conn-from-role" className="block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">From role</label>
+                  <input id="conn-from-role" value={selectedConn.fromRole || ""} onFocus={rememberOnce} onBlur={() => { editRemembered.current = false; }} onChange={(e) => updateSelectedConn({ fromRole: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink" />
+                </div>
+                <div>
+                  <label htmlFor="conn-from-mult" className="block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">From multiplicity</label>
+                  <input id="conn-from-mult" value={selectedConn.fromMult || ""} onFocus={rememberOnce} onBlur={() => { editRemembered.current = false; }} onChange={(e) => updateSelectedConn({ fromMult: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink" />
+                </div>
+                <div>
+                  <label htmlFor="conn-to-role" className="block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">To role</label>
+                  <input id="conn-to-role" value={selectedConn.toRole || ""} onFocus={rememberOnce} onBlur={() => { editRemembered.current = false; }} onChange={(e) => updateSelectedConn({ toRole: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink" />
+                </div>
+                <div>
+                  <label htmlFor="conn-to-mult" className="block font-mono text-[10px] font-bold uppercase tracking-wider text-soft">To multiplicity</label>
+                  <input id="conn-to-mult" value={selectedConn.toMult || ""} onFocus={rememberOnce} onBlur={() => { editRemembered.current = false; }} onChange={(e) => updateSelectedConn({ toMult: e.target.value })} className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 font-mono text-[11px] text-ink" />
+                </div>
+              </div>
             </div>
           )}
 
           {/* Selected Node Inspector Drawer (Full CRUD) */}
           {selectedNode && (
-            <div className={`rounded-xl border border-line bg-paper p-5 shadow-xs ${fullPage ? "max-h-48 shrink-0 overflow-auto" : ""}`}>
+            <div className={`foundry-print-hide rounded-xl border border-line bg-paper p-5 shadow-xs ${fullPage ? (selectedGlyph ? "max-h-56 shrink-0 overflow-auto" : "max-h-48 shrink-0 overflow-auto") : ""}`}>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
                 <div className="flex items-center gap-3">
                   <div
                     className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-raised shadow-2xs"
-                    style={{ color: nodeTypeMeta[selectedNode.type].color }}
+                    style={{ color: faceMeta(selectedNode.type).color }}
                   >
                     {(() => {
-                      const SelectedIcon = nodeTypeMeta[selectedNode.type].Icon;
+                      const SelectedIcon = faceMeta(selectedNode.type).Icon;
                       return <SelectedIcon size={20} />;
                     })()}
                   </div>
                   <div>
                     <h3 className="font-mono text-sm font-bold text-ink tracking-tight">{selectedNode.label}</h3>
-                    <p className="font-mono text-xs text-soft">{nodeTypeMeta[selectedNode.type].name}</p>
+                    <p className="font-mono text-xs text-soft">{faceMeta(selectedNode.type).name}</p>
                   </div>
                 </div>
 
@@ -2953,7 +3809,7 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
               </div>
 
               {/* Node Customization Controls (CRUD Update) */}
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
+              <div className={`mt-4 grid grid-cols-1 gap-4 ${selectedGlyph ? "sm:grid-cols-2" : "sm:grid-cols-4"}`}>
                 <div>
                   <label htmlFor="node-label" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
                     Node Label
@@ -2969,80 +3825,180 @@ export function FoundryLab({ m, initialChallengeId }: { m: Messages; initialChal
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="node-health" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
-                    Health Status
-                  </label>
-                  <select
-                    id="node-health"
-                    value={selectedNode.health}
-                    onChange={(e) => updateSelectedNode("health", e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
-                  >
-                    <option value="healthy">Healthy (Operational)</option>
-                    <option value="degraded">Degraded (High Latency)</option>
-                    <option value="down">Down (Outage / Crash)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="node-latency" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
-                    Latency (ms)
-                  </label>
-                  <input
-                    id="node-latency"
-                    type="number"
-                    value={selectedNode.latency}
-                    onFocus={rememberOnce}
-                    onBlur={() => { editRemembered.current = false; }}
-                    onChange={(e) => updateSelectedNode("latency", Number(e.target.value))}
-                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="node-rps" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
-                    RPS Capacity
-                  </label>
-                  <input
-                    id="node-rps"
-                    type="number"
-                    value={selectedNode.capacity}
-                    onFocus={rememberOnce}
-                    onBlur={() => { editRemembered.current = false; }}
-                    onChange={(e) => updateSelectedNode("capacity", Number(e.target.value))}
-                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
-                  />
-                </div>
+                {selectedGlyph ? (
+                  <div>
+                    <label htmlFor="node-stereotype" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Stereotype</label>
+                    <input
+                      id="node-stereotype"
+                      type="text"
+                      value={selectedNode.stereotype || ""}
+                      onFocus={rememberOnce}
+                      onBlur={() => { editRemembered.current = false; }}
+                      onChange={(e) => updateSelectedNode("stereotype", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label htmlFor="node-health" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Health Status</label>
+                      <select
+                        id="node-health"
+                        value={selectedNode.health}
+                        onChange={(e) => updateSelectedNode("health", e.target.value)}
+                        className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                      >
+                        <option value="healthy">Healthy (Operational)</option>
+                        <option value="degraded">Degraded (High Latency)</option>
+                        <option value="down">Down (Outage / Crash)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="node-latency" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Latency (ms)</label>
+                      <input
+                        id="node-latency"
+                        type="number"
+                        value={selectedNode.latency}
+                        onFocus={rememberOnce}
+                        onBlur={() => { editRemembered.current = false; }}
+                        onChange={(e) => updateSelectedNode("latency", Number(e.target.value))}
+                        className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="node-rps" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">RPS Capacity</label>
+                      <input
+                        id="node-rps"
+                        type="number"
+                        value={selectedNode.capacity}
+                        onFocus={rememberOnce}
+                        onBlur={() => { editRemembered.current = false; }}
+                        onChange={(e) => updateSelectedNode("capacity", Number(e.target.value))}
+                        className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
-              {/* Enterprise Architecture Metadata Footer */}
-              <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line/60 pt-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="node-role" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Role</label>
-                  <input
-                    id="node-role"
-                    type="text"
-                    value={selectedNode.role}
-                    onFocus={rememberOnce}
-                    onBlur={() => { editRemembered.current = false; }}
-                    onChange={(e) => updateSelectedNode("role", e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
-                  />
+              {selectedGlyph ? (
+                <div className="mt-4 grid grid-cols-1 gap-3 border-t border-line/60 pt-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="node-visibility" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Visibility</label>
+                    <select id="node-visibility" value={selectedNode.visibility || ""} onChange={(e) => updateSelectedNode("visibility", visibilityOf(e.target.value) || undefined)} className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs text-ink">
+                      <option value="">Unspecified</option>
+                      <option value="public">public</option>
+                      <option value="private">private</option>
+                      <option value="protected">protected</option>
+                      <option value="package">package</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-5 text-xs text-ink">
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedNode.abstract} onChange={(e) => updateSelectedNode("abstract", e.target.checked || undefined)} /> isAbstract</label>
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedNode.finalSpec} onChange={(e) => updateSelectedNode("finalSpec", e.target.checked || undefined)} /> isFinalSpecialization</label>
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedNode.leaf} onChange={(e) => updateSelectedNode("leaf", e.target.checked || undefined)} /> isLeaf</label>
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedNode.active} onChange={(e) => updateSelectedNode("active", e.target.checked || undefined)} /> isActive</label>
+                  </div>
+                  <div>
+                    <label htmlFor="node-font" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Font</label>
+                    <select id="node-font" value={selectedNode.font || ""} onChange={(e) => updateSelectedNode("font", e.target.value === "Arial" || e.target.value === "Georgia" || e.target.value === "monospace" ? e.target.value : undefined)} className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 text-xs text-ink">
+                      <option value="">Canvas</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="monospace">Monospace</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="node-ink" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Line</label>
+                    <select id="node-ink" value={selectedNode.ink || ""} onChange={(e) => updateSelectedNode("ink", e.target.value === "ink" || e.target.value === "copper" || e.target.value === "amber" ? e.target.value : undefined)} className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 text-xs text-ink">
+                      <option value="">Ink</option>
+                      <option value="ink">Ink</option>
+                      <option value="copper">Copper</option>
+                      <option value="amber">Amber</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="node-align" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Alignment</label>
+                    <select id="node-align" value={selectedNode.align || ""} onChange={(e) => updateSelectedNode("align", e.target.value === "left" || e.target.value === "center" || e.target.value === "right" ? e.target.value : undefined)} className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 text-xs text-ink">
+                      <option value="">Default</option>
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="node-line" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Line style</label>
+                    <select id="node-line" value={selectedNode.lineStyle || "solid"} onChange={(e) => updateSelectedNode("lineStyle", e.target.value === "dashed" ? "dashed" : "solid")} className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 text-xs text-ink">
+                      <option value="solid">Solid</option>
+                      <option value="dashed">Dashed</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <DocumentationField id="node-docs" value={selectedNode.documentation || ""} onChange={(value) => updateSelectedNode("documentation", value)} />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="node-tool" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Field name</label>
-                  <input
-                    id="node-tool"
-                    type="text"
-                    value={selectedNode.industryTool}
-                    onFocus={rememberOnce}
-                    onBlur={() => { editRemembered.current = false; }}
-                    onChange={(e) => updateSelectedNode("industryTool", e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
-                  />
+              ) : null}
+
+              {selectedGlyph ? (
+                <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line/60 pt-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="node-attributes" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
+                      {selectedGlyph === "enum" ? "Literals" : selectedGlyph === "state" ? "Internal" : selectedGlyph === "object" ? "Slots" : selectedGlyph === "frag" ? "Operands" : "Attributes"}
+                    </label>
+                    <textarea
+                      id="node-attributes"
+                      rows={2}
+                      value={selectedNode.attributes || ""}
+                      onFocus={rememberOnce}
+                      onBlur={() => { editRemembered.current = false; }}
+                      onChange={(e) => updateSelectedNode("attributes", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="node-operations" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">{selectedGlyph === "frag" ? "Guards" : "Operations"}</label>
+                    <textarea
+                      id="node-operations"
+                      rows={3}
+                      value={selectedNode.operations || ""}
+                      onFocus={rememberOnce}
+                      onBlur={() => { editRemembered.current = false; }}
+                      onChange={(e) => updateSelectedNode("operations", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line/60 pt-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="node-role" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Role</label>
+                    <input
+                      id="node-role"
+                      type="text"
+                      value={selectedNode.role}
+                      onFocus={rememberOnce}
+                      onBlur={() => { editRemembered.current = false; }}
+                      onChange={(e) => updateSelectedNode("role", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="node-tool" className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink">Field name</label>
+                    <input
+                      id="node-tool"
+                      type="text"
+                      value={selectedNode.industryTool}
+                      onFocus={rememberOnce}
+                      onBlur={() => { editRemembered.current = false; }}
+                      onChange={(e) => updateSelectedNode("industryTool", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-xs font-semibold text-ink focus:border-ink focus:outline-hidden"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <DocumentationField id="node-docs" value={selectedNode.documentation || ""} onChange={(value) => updateSelectedNode("documentation", value)} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

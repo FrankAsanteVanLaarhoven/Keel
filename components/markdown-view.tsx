@@ -13,6 +13,7 @@ function Inline({ text }: { text: string }) {
 function InlinePart({ part }: { part: MarkdownInline }) {
   if (part.type === "strong") return <strong>{part.text}</strong>;
   if (part.type === "em") return <em>{part.text}</em>;
+  if (part.type === "del") return <del>{part.text}</del>;
   if (part.type === "code") return <code className="bg-raised px-1">{part.text}</code>;
   if (part.type === "link") {
     return (
@@ -40,6 +41,43 @@ export function MarkdownView({ source }: { source: string }) {
                 <li key={itemIndex}><Inline text={item} /></li>
               ))}
             </ul>
+          );
+        }
+        if (block.type === "ol") {
+          return (
+            <ol key={index} className="list-decimal ps-5">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}><Inline text={item} /></li>
+              ))}
+            </ol>
+          );
+        }
+        if (block.type === "task") {
+          return (
+            <ul key={index} className="space-y-1">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex} className="flex min-h-11 items-center gap-2">
+                  <input type="checkbox" disabled checked={item.checked} aria-label={item.checked ? "Checked" : "Unchecked"} />
+                  <Inline text={item.text} />
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.type === "table") {
+          return (
+            <div key={index} className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>{block.header.map((cell, cellIndex) => <th key={cellIndex} className="border border-line px-2 py-1 text-left font-medium"><Inline text={cell} /></th>)}</tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex} className="border border-line px-2 py-1"><Inline text={cell} /></td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
         }
         if (block.type === "quote") return <blockquote key={index} className="border-s-2 border-copper ps-4 text-soft"><Inline text={block.text} /></blockquote>;

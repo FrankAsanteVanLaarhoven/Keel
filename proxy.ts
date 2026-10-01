@@ -55,7 +55,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!_next/static|_next/image|icon.svg|favicon.ico|pcm-worklet.js|sw.js|manifest.webmanifest).*)",
+      source: "/((?!_next/static|_next/image|icon.svg|favicon.ico|pcm-worklet.js|sw.js|manifest.webmanifest|foundry-extension-frame).*)",
     },
   ],
 };

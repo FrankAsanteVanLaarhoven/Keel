@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function FoundryPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ challenge?: string }>;
+  searchParams?: Promise<{ challenge?: string; studio?: string }>;
 }) {
   const locale = await resolveLocale();
   const m = t(locale);
@@ -24,7 +24,7 @@ export default async function FoundryPage({
 
   return (
     <main id="content" className="pb-28">
-      <FoundryLab m={m} initialChallengeId={resolvedParams?.challenge} />
+      <FoundryLab m={m} initialChallengeId={resolvedParams?.challenge} initialStudio={resolvedParams?.studio} />
     </main>
   );
 }

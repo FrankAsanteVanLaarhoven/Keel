@@ -107,6 +107,7 @@ function Frame({ locale, m, children }: { locale: Locale; m: Messages; children:
     ["/course", m.cases],
     ["/term", m.termNav],
     ["/ops", m.opsNav],
+    ["/csc1033", m.cscNav],
     ["/foundry", m.foundry],
     ["/foundry/pipeline", m.pipeline],
     ["/workshop", m.workshop],

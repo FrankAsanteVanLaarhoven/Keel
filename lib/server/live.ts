@@ -59,11 +59,22 @@ export async function speakText(text: string, locale: Locale): Promise<ArrayBuff
   return response.arrayBuffer();
 }
 
-export async function openrouterReply(instructions: string, message: string): Promise<string> {
+type ReplyLimits = { input?: number; output?: number; maxTokens?: number };
+
+function replyBounds(limits?: ReplyLimits): { input: number; output: number; maxTokens: number } {
+  return {
+    input: limits?.input ?? 2000,
+    output: limits?.output ?? 800,
+    maxTokens: limits?.maxTokens ?? 400,
+  };
+}
+
+export async function openrouterReply(instructions: string, message: string, limits?: ReplyLimits): Promise<string> {
   const key = openRouterKey();
   if (!key) throw new Error("no_key");
   const model = process.env.OPENROUTER_MODEL || "x-ai/grok-4.7";
   const appUrl = process.env.BETTER_AUTH_URL || "https://keel.learn";
+  const bounds = replyBounds(limits);
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -76,49 +87,52 @@ export async function openrouterReply(instructions: string, message: string): Pr
       model,
       messages: [
         { role: "system", content: instructions },
-        { role: "user", content: message.slice(0, 2000) },
+        { role: "user", content: message.slice(0, bounds.input) },
       ],
-      max_tokens: 400,
+      max_tokens: bounds.maxTokens,
       temperature: 0.4,
     }),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(bounds.maxTokens > 400 ? 20000 : 15000),
   });
   if (!response.ok) throw new Error("openrouter");
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content ?? "";
-  return content.trim().slice(0, 800);
+  return content.trim().slice(0, bounds.output);
 }
 
-export async function directXaiReply(instructions: string, message: string): Promise<string> {
+export async function directXaiReply(instructions: string, message: string, limits?: ReplyLimits): Promise<string> {
   const key = process.env.XAI_API_KEY;
   if (!key) throw new Error("no_key");
+  const bounds = replyBounds(limits);
+  const body: { model: string; instructions: string; input: string; max_output_tokens?: number } = {
+    model: "grok-4.7",
+    instructions,
+    input: message.slice(0, bounds.input),
+  };
+  if (limits?.maxTokens) body.max_output_tokens = bounds.maxTokens;
   const response = await fetch("https://api.x.ai/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "grok-4.7",
-      instructions,
-      input: message.slice(0, 2000),
-    }),
-    signal: AbortSignal.timeout(15000),
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(bounds.maxTokens > 400 ? 20000 : 15000),
   });
   if (!response.ok) throw new Error("tutor");
-  return responseText(await response.json()).slice(0, 800);
+  return responseText(await response.json()).slice(0, bounds.output);
 }
 
-export async function aiReply(instructions: string, message: string): Promise<string> {
+export async function aiReply(instructions: string, message: string, limits?: ReplyLimits): Promise<string> {
   if (openRouterKey()) {
     try {
-      return await openrouterReply(instructions, message);
+      return await openrouterReply(instructions, message, limits);
     } catch (err) {
       if (process.env.XAI_API_KEY) {
-        return await directXaiReply(instructions, message);
+        return await directXaiReply(instructions, message, limits);
       }
       throw err;
     }
   }
   if (process.env.XAI_API_KEY) {
-    return directXaiReply(instructions, message);
+    return directXaiReply(instructions, message, limits);
   }
   throw new Error("no_key");
 }

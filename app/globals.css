@@ -81,6 +81,71 @@ body {
   outline-offset: 3px;
 }
 
+.foundry-sketch [class*="border-zinc-300"],
+.foundry-sketch [class*="border-zinc-400"],
+.foundry-sketch [class*="border-zinc-500"],
+.foundry-sketch [class*="border-zinc-600"] {
+  border-color: transparent;
+}
+
+[data-foundry-theme="light"].foundry-canvas {
+  background-color: #f6f0e6;
+  border-color: #d7cbb8;
+}
+
+[data-foundry-theme="light"] .foundry-board [class~="bg-zinc-900/90"],
+[data-foundry-theme="light"] .foundry-board [class~="bg-zinc-900/95"],
+[data-foundry-theme="light"] .foundry-board [class~="bg-zinc-900"],
+[data-foundry-theme="light"] .foundry-board [class~="bg-zinc-800"] {
+  background-color: #fffaf3;
+  color: #1c1916;
+}
+
+[data-foundry-theme="light"] .foundry-board [class~="text-zinc-100"],
+[data-foundry-theme="light"] .foundry-board [class~="text-zinc-200"],
+[data-foundry-theme="light"] .foundry-board [class~="text-zinc-300"],
+[data-foundry-theme="light"] .foundry-board [class~="text-zinc-400"] {
+  color: #1c1916;
+}
+
+[data-foundry-theme="light"] .foundry-board [class~="border-zinc-400"],
+[data-foundry-theme="light"] .foundry-board [class~="border-zinc-500"],
+[data-foundry-theme="light"] .foundry-board [class~="border-zinc-600"],
+[data-foundry-theme="light"] .foundry-board [class~="border-zinc-700"],
+[data-foundry-theme="light"] .foundry-board [class~="border-zinc-700/80"] {
+  border-color: #1c1916;
+}
+
+[data-foundry-theme="light"] .foundry-board [stroke="#e4e4e7"] { stroke: #1c1916; }
+[data-foundry-theme="light"] .foundry-board [fill="#e4e4e7"] { fill: #1c1916; }
+[data-foundry-theme="light"] .foundry-board [fill="#09090b"] { fill: #f6f0e6; }
+
+@media print {
+  .foundry-print-hide { display: none !important; }
+  [data-foundry-root] {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+  [data-foundry-root] .foundry-canvas {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 12rem !important;
+  }
+  [data-foundry-root] .foundry-canvas > .overflow-auto {
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+}
+
+[data-foundry-page="a4"] { page: foundry-a4; }
+[data-foundry-page="letter"] { page: foundry-letter; }
+@page foundry-a4 { size: A4; margin: 12mm; }
+@page foundry-letter { size: letter; margin: 0.5in; }
+
 .kicker {
   font-family: var(--font-mono);
   font-size: 11px;

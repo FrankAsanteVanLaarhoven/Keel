@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { sections } from "@/lib/course/meta";
 import { getPack } from "@/lib/course";
+import { cscWeeks } from "@/lib/csc1033";
 import { opsSections } from "@/lib/ops/meta";
 import { getOps } from "@/lib/ops";
 import { t } from "@/lib/i18n/catalog";
@@ -38,6 +39,7 @@ export default async function HomePage() {
         <ContinueLink m={m} />
         <Link className="border border-line px-4 py-2 text-sm" href="/course">{m.seeCases}</Link>
         <Link className="border border-line px-4 py-2 text-sm" href="/ops">{m.openOps}</Link>
+        <Link className="border border-line px-4 py-2 text-sm" href="/csc1033">{m.cscNav}</Link>
       </div>
       <section className="mt-16 grid gap-10 border-t border-line pt-10 md:grid-cols-2">
         <div>
@@ -83,6 +85,24 @@ export default async function HomePage() {
               <span className="text-sm text-soft">{m.harborFile}</span>
             </Link>
           </li>
+        </ol>
+      </section>
+      <section className="mt-16">
+        <p className="kicker">CSC1033</p>
+        <h2 className="mt-3 text-3xl font-medium tracking-tight">{m.cscTitle}</h2>
+        <p className="mt-4 max-w-2xl leading-8">{m.cscDeck}</p>
+        <ol className="mt-4 divide-y divide-line border-y border-line">
+          {cscWeeks.map((week) => (
+            <li key={week.id}>
+              <Link className="flex items-baseline justify-between gap-6 py-4" href={`/csc1033/${week.id}`}>
+                <span>
+                  <span className="num me-3 text-soft">{String(week.no).padStart(2, "0")}</span>
+                  {week.title}
+                </span>
+                <span className="text-sm text-soft">{week.badge}</span>
+              </Link>
+            </li>
+          ))}
         </ol>
       </section>
       <section className="mt-16">
